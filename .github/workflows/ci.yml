@@ -24,15 +24,18 @@ jobs:
         uses: android-actions/setup-android@v3
 
       - name: Create google-services.json
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
         run: |
           mkdir -p composeApp
-          echo "${{ secrets.GOOGLE_SERVICES_JSON }}" > composeApp/google-services.json
+          printf '%s' "$GOOGLE_SERVICES_JSON" > composeApp/google-services.json
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
       - name: Build Android
-        run: ./gradlew :composeApp:assembleDebug --no-configuration-cache
+        timeout-minutes: 20
+        run: ./gradlew :composeApp:assembleDebug --no-configuration-cache --no-daemon
 
   build-ios:
     name: Build iOS
@@ -53,9 +56,11 @@ jobs:
           xcode-version: latest-stable
 
       - name: Create GoogleService-Info.plist
+        env:
+          GOOGLE_SERVICE_INFO_PLIST: ${{ secrets.GOOGLE_SERVICE_INFO_PLIST }}
         run: |
           mkdir -p iosApp/iosApp
-          echo "${{ secrets.GOOGLE_SERVICE_INFO_PLIST }}" > iosApp/iosApp/GoogleService-Info.plist
+          printf '%s' "$GOOGLE_SERVICE_INFO_PLIST" > iosApp/iosApp/GoogleService-Info.plist
 
       - name: Install CocoaPods
         run: |
@@ -66,7 +71,8 @@ jobs:
         run: chmod +x gradlew
 
       - name: Build iOS
-        run: ./gradlew :composeApp:linkDebugFrameworkIosSimulatorArm64 --no-configuration-cache
+        timeout-minutes: 20
+        run: ./gradlew :composeApp:linkDebugFrameworkIosSimulatorArm64 --no-configuration-cache --no-daemon
 
   build-web-js:
     name: Build Web (JS)
@@ -87,15 +93,27 @@ jobs:
           node-version: '20'
 
       - name: Create firebaseConfig.js
+        env:
+          FIREBASE_CONFIG_JS: ${{ secrets.FIREBASE_CONFIG_JS }}
         run: |
           mkdir -p composeApp/src/webMain/resources
-          echo "${{ secrets.FIREBASE_CONFIG_JS }}" > composeApp/src/webMain/resources/firebaseConfig.js
+          printf '%s' "$FIREBASE_CONFIG_JS" > composeApp/src/webMain/resources/firebaseConfig.js
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
       - name: Build Web JS
-        run: ./gradlew :composeApp:jsBrowserProductionWebpack --no-configuration-cache
+        timeout-minutes: 15
+        env:
+          NODE_OPTIONS: "--max-old-space-size=4096"
+        run: |
+          echo "Starting JS webpack build..."
+          ./gradlew :composeApp:jsBrowserProductionWebpack \
+            --no-configuration-cache \
+            --stacktrace \
+            --no-daemon \
+            --max-workers=2 \
+            --console=plain
 
   build-web-wasmjs:
     name: Build Web (WasmJS)
@@ -116,15 +134,27 @@ jobs:
           node-version: '20'
 
       - name: Create firebaseConfig.js
+        env:
+          FIREBASE_CONFIG_JS: ${{ secrets.FIREBASE_CONFIG_JS }}
         run: |
           mkdir -p composeApp/src/webMain/resources
-          echo "${{ secrets.FIREBASE_CONFIG_JS }}" > composeApp/src/webMain/resources/firebaseConfig.js
+          printf '%s' "$FIREBASE_CONFIG_JS" > composeApp/src/webMain/resources/firebaseConfig.js
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
       - name: Build Web WasmJS
-        run: ./gradlew :composeApp:wasmJsBrowserProductionWebpack --no-configuration-cache
+        timeout-minutes: 15
+        env:
+          NODE_OPTIONS: "--max-old-space-size=4096"
+        run: |
+          echo "Starting WasmJS webpack build..."
+          ./gradlew :composeApp:wasmJsBrowserProductionWebpack \
+            --no-configuration-cache \
+            --stacktrace \
+            --no-daemon \
+            --max-workers=2 \
+            --console=plain
 
   build-server:
     name: Build Server
@@ -140,15 +170,18 @@ jobs:
           java-version: '17'
 
       - name: Create serviceAccountKey.json
+        env:
+          SERVICE_ACCOUNT_KEY_JSON: ${{ secrets.SERVICE_ACCOUNT_KEY_JSON }}
         run: |
           mkdir -p server/src/main/resources
-          echo "${{ secrets.SERVICE_ACCOUNT_KEY_JSON }}" > server/src/main/resources/serviceAccountKey.json
+          printf '%s' "$SERVICE_ACCOUNT_KEY_JSON" > server/src/main/resources/serviceAccountKey.json
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
       - name: Build Server
-        run: ./gradlew :server:build --no-configuration-cache
+        timeout-minutes: 10
+        run: ./gradlew :server:build --no-configuration-cache --no-daemon
 
   # Test jobs - depend on build jobs
   test-compose-app:
@@ -174,20 +207,25 @@ jobs:
           node-version: '20'
 
       - name: Create google-services.json
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
         run: |
           mkdir -p composeApp
-          echo "${{ secrets.GOOGLE_SERVICES_JSON }}" > composeApp/google-services.json
+          printf '%s' "$GOOGLE_SERVICES_JSON" > composeApp/google-services.json
 
       - name: Create firebaseConfig.js
+        env:
+          FIREBASE_CONFIG_JS: ${{ secrets.FIREBASE_CONFIG_JS }}
         run: |
           mkdir -p composeApp/src/webMain/resources
-          echo "${{ secrets.FIREBASE_CONFIG_JS }}" > composeApp/src/webMain/resources/firebaseConfig.js
+          printf '%s' "$FIREBASE_CONFIG_JS" > composeApp/src/webMain/resources/firebaseConfig.js
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
       - name: Run Compose App Tests
-        run: ./gradlew :composeApp:allTests --no-configuration-cache
+        timeout-minutes: 15
+        run: ./gradlew :composeApp:allTests --no-configuration-cache --no-daemon
 
   test-server:
     name: Test Server
@@ -204,13 +242,33 @@ jobs:
           java-version: '17'
 
       - name: Create serviceAccountKey.json
+        env:
+          SERVICE_ACCOUNT_KEY_JSON: ${{ secrets.SERVICE_ACCOUNT_KEY_JSON }}
         run: |
           mkdir -p server/src/main/resources
-          echo "${{ secrets.SERVICE_ACCOUNT_KEY_JSON }}" > server/src/main/resources/serviceAccountKey.json
+          printf '%s' "$SERVICE_ACCOUNT_KEY_JSON" > server/src/main/resources/serviceAccountKey.json
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
       - name: Run Server Tests
-        run: ./gradlew :server:test --no-configuration-cache
+        timeout-minutes: 10
+        run: ./gradlew :server:test --no-configuration-cache --no-daemon
+
+  # Final validation job - validates all tests passed
+  validate-tests:
+    name: Validate Tests
+    runs-on: ubuntu-latest
+    needs: [test-compose-app, test-server]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Validate Test Results
+        run: |
+          echo "✅ All tests passed successfully!"
+          echo "  - Compose App tests: PASSED"
+          echo "  - Server tests: PASSED"
+          echo ""
+          echo "CI validation complete - all checks passed!"
 
