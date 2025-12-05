@@ -1,0 +1,216 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  # Build jobs - run in parallel
+  build-android:
+    name: Build Android
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Create google-services.json
+        run: |
+          mkdir -p composeApp
+          echo "${{ secrets.GOOGLE_SERVICES_JSON }}" > composeApp/google-services.json
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Build Android
+        run: ./gradlew :composeApp:assembleDebug --no-configuration-cache
+
+  build-ios:
+    name: Build iOS
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Create GoogleService-Info.plist
+        run: |
+          mkdir -p iosApp/iosApp
+          echo "${{ secrets.GOOGLE_SERVICE_INFO_PLIST }}" > iosApp/iosApp/GoogleService-Info.plist
+
+      - name: Install CocoaPods
+        run: |
+          sudo gem install cocoapods
+          cd iosApp && pod install
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Build iOS
+        run: ./gradlew :composeApp:linkDebugFrameworkIosSimulatorArm64 --no-configuration-cache
+
+  build-web-js:
+    name: Build Web (JS)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Create firebaseConfig.js
+        run: |
+          mkdir -p composeApp/src/webMain/resources
+          echo "${{ secrets.FIREBASE_CONFIG_JS }}" > composeApp/src/webMain/resources/firebaseConfig.js
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Build Web JS
+        run: ./gradlew :composeApp:jsBrowserProductionWebpack --no-configuration-cache
+
+  build-web-wasmjs:
+    name: Build Web (WasmJS)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Create firebaseConfig.js
+        run: |
+          mkdir -p composeApp/src/webMain/resources
+          echo "${{ secrets.FIREBASE_CONFIG_JS }}" > composeApp/src/webMain/resources/firebaseConfig.js
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Build Web WasmJS
+        run: ./gradlew :composeApp:wasmJsBrowserProductionWebpack --no-configuration-cache
+
+  build-server:
+    name: Build Server
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Create serviceAccountKey.json
+        run: |
+          mkdir -p server/src/main/resources
+          echo "${{ secrets.SERVICE_ACCOUNT_KEY_JSON }}" > server/src/main/resources/serviceAccountKey.json
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Build Server
+        run: ./gradlew :server:build --no-configuration-cache
+
+  # Test jobs - depend on build jobs
+  test-compose-app:
+    name: Test Compose App
+    runs-on: ubuntu-latest
+    needs: [build-android, build-ios, build-web-js, build-web-wasmjs]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Create google-services.json
+        run: |
+          mkdir -p composeApp
+          echo "${{ secrets.GOOGLE_SERVICES_JSON }}" > composeApp/google-services.json
+
+      - name: Create firebaseConfig.js
+        run: |
+          mkdir -p composeApp/src/webMain/resources
+          echo "${{ secrets.FIREBASE_CONFIG_JS }}" > composeApp/src/webMain/resources/firebaseConfig.js
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Run Compose App Tests
+        run: ./gradlew :composeApp:allTests --no-configuration-cache
+
+  test-server:
+    name: Test Server
+    runs-on: ubuntu-latest
+    needs: [build-server]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Create serviceAccountKey.json
+        run: |
+          mkdir -p server/src/main/resources
+          echo "${{ secrets.SERVICE_ACCOUNT_KEY_JSON }}" > server/src/main/resources/serviceAccountKey.json
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Run Server Tests
+        run: ./gradlew :server:test --no-configuration-cache
+
