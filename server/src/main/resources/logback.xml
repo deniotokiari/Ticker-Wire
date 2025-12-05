@@ -1,12 +1,29 @@
 <configuration>
+    <!-- 
+        For Cloud Run / Production: Set LOG_FORMAT=json environment variable
+        This config produces JSON-like structured logs that Cloud Run can parse.
+        Format: timestamp | level | logger | request_id | message
+    -->
     <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
-            <pattern>%d{YYYY-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+            <pattern>%d{yyyy-MM-dd'T'HH:mm:ss.SSS'Z'} | %-5level | %logger{36} | %X{request_id:-none} | %msg%n</pattern>
         </encoder>
     </appender>
-    <root level="trace">
+
+    <root level="INFO">
         <appender-ref ref="STDOUT"/>
     </root>
-    <logger name="org.eclipse.jetty" level="INFO"/>
-    <logger name="io.netty" level="INFO"/>
+
+    <!-- Application loggers -->
+    <logger name="pl.deniotokiari.tickerwire" level="INFO"/>
+    
+    <!-- Request logging -->
+    <logger name="io.ktor.server.plugins.calllogging" level="INFO"/>
+    
+    <!-- Suppress noisy Netty I/O debug logs -->
+    <logger name="io.netty" level="WARN"/>
+    <logger name="io.ktor.server.netty" level="INFO"/>
+    
+    <!-- HTTP client logging - reduces noise from external API calls -->
+    <logger name="io.ktor.client" level="INFO"/>
 </configuration>

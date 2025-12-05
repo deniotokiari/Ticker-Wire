@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Ticker Wire</string>
+
+    <!-- Search -->
+    <string name="search_placeholder">Search for a ticker (e.g., AAPL)</string>
+    <string name="search_to_add_placeholder">Search to add a ticker</string>
+    <string name="search_loading">Searching for tickers...</string>
+    <string name="search_empty">Empty result</string>
+    <string name="search_no_results_title">No results for "%1$s"</string>
+    <string name="search_no_results_message">Try searching for another stock or check the ticker symbol for spelling errors.</string>
+    
+    <!-- Watchlist -->
+    <string name="my_watchlist">My Watchlist</string>
+    <string name="watchlist_empty_title">Your watchlist is empty.</string>
+    <string name="watchlist_empty_description">Use the search to find and add stocks.</string>
+    
+    <!-- News -->
+    <string name="recent_news">Recent News</string>
+    <string name="recent_news_empty_title">No Recent News</string>
+    <string name="recent_news_empty_description">Add stocks to your watchlist or check back later for the latest updates.</string>
+    
+    <!-- Errors -->
+    <string name="error_failed_to_load_news_message">Failed to load news.</string>
+    <string name="error_failed_to_load_news_action">Try again.</string>
+    <string name="error_failed_to_load_search_results_message">Failed to load results.</string>
+    <string name="error_failed_to_load_search_results_action">Try again.</string>
+    <string name="error_failed_to_add_ticker_to_watch_list_message">Failed to add ticker.</string>
+    <string name="error_failed_to_add_ticker_to_watch_list_action">Try again.</string>
+    <string name="error_failed_to_remove_ticker_from_watch_list_message">Failed to remove ticker.</string>
+    <string name="error_failed_to_remove_ticker_from_watch_list_action">Try again.</string>
+    
+    <!-- Time -->
+    <string name="time_ago_minutes">%1$dm ago</string>
+    <string name="time_ago_hours">%1$dh ago</string>
+    <string name="time_ago_days">%1$dd ago</string>
+</resources>
+

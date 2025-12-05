@@ -17,3 +17,11 @@ captures
 !*.xcworkspace/contents.xcworkspacedata
 **/xcshareddata/WorkspaceSettings.xcsettings
 node_modules/
+server/serviceAccountKey.json
+/composeApp/src/webMain/resources/firebaseConfig.js
+/composeApp/google-services.json
+/iosApp/iosApp/GoogleService-Info.plist
+
+# CocoaPods
+/iosApp/Pods/
+/iosApp/Podfile.lock
