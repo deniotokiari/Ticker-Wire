@@ -1,6 +1,7 @@
 package pl.deniotokiari.tickerwire.feature.home.data.source
 
 import kotlinx.serialization.serializer
+import org.koin.core.annotation.Named
 import org.koin.core.annotation.Single
 import pl.deniotokiari.tickerwire.common.data.store.KeyValueLocalDataSource
 import pl.deniotokiari.tickerwire.model.Ticker
@@ -10,7 +11,7 @@ private const val KEY_ITEMS = "items"
 
 @Single
 class WatchlistLocalDataSource(
-    private val keyValueLocalDataSource: KeyValueLocalDataSource = KeyValueLocalDataSource(name = NAME_WATCH_LIST),
+    @Named(NAME_WATCH_LIST) private val keyValueLocalDataSource: KeyValueLocalDataSource,
 ) {
     fun addTicker(ticker: Ticker) {
         val tickers = getTickers()
@@ -39,3 +40,8 @@ class WatchlistLocalDataSource(
         ) ?: emptyList()
     }
 }
+
+@Named(NAME_WATCH_LIST)
+@Single
+fun provideWatchListKeyValueLocalDataSource(): KeyValueLocalDataSource =
+    KeyValueLocalDataSource(name = NAME_WATCH_LIST)
