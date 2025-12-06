@@ -91,7 +91,7 @@ fun SearchScreen(
 }
 
 @Composable
-private fun SearchContent(
+internal fun SearchContent(
     uiState: SearchUiState,
     onAction: (SearchUiAction) -> Unit,
 ) {
