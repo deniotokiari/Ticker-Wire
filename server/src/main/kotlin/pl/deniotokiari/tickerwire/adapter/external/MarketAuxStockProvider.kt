@@ -61,7 +61,7 @@ class MarketAuxStockProvider(
      * Get news for tickers
      * GET https://api.marketaux.com/v1/news/all?symbols={tickers}
      */
-    override suspend fun news(tickers: List<String>): Map<String, List<TickerNewsDto>> {
+    override suspend fun news(tickers: Collection<String>): Map<String, List<TickerNewsDto>> {
         if (tickers.isEmpty()) {
             return emptyMap()
         }

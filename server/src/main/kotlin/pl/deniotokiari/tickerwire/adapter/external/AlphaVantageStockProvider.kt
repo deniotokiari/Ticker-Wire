@@ -49,7 +49,7 @@ class AlphaVantageStockProvider(
         } ?: emptyList()
     }
 
-    override suspend fun news(tickers: List<String>): Map<String, List<TickerNewsDto>> {
+    override suspend fun news(tickers: Collection<String>): Map<String, List<TickerNewsDto>> {
         if (tickers.isEmpty()) {
             return emptyMap()
         }
@@ -58,7 +58,7 @@ class AlphaVantageStockProvider(
 
         val newsByTicker = mutableMapOf<String, List<TickerNewsDto>>()
 
-        tickers.forEach { ticker ->
+        tickers.take(1).forEach { ticker ->
             try {
                 val response: AlphaVantageNewsResponse = client.get(uri) {
                     parameter("function", "NEWS_SENTIMENT")
@@ -94,7 +94,7 @@ class AlphaVantageStockProvider(
         return newsByTicker
     }
 
-    override suspend fun info(tickers: List<String>): Map<String, TickerInfoDto> {
+    override suspend fun info(tickers: Collection<String>): Map<String, TickerInfoDto> {
         if (tickers.isEmpty()) {
             return emptyMap()
         }
@@ -103,7 +103,7 @@ class AlphaVantageStockProvider(
 
         val infoByTicker = mutableMapOf<String, TickerInfoDto>()
 
-        tickers.forEach { ticker ->
+        tickers.take(1).forEach { ticker ->
             try {
                 val response: AlphaVantageQuoteResponse = client.get(uri) {
                     parameter("function", "GLOBAL_QUOTE")

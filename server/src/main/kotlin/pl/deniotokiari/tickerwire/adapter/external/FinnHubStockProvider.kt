@@ -56,7 +56,7 @@ class FinnHubStockProvider(
         } ?: emptyList()
     }
 
-    override suspend fun news(tickers: List<String>): Map<String, List<TickerNewsDto>> {
+    override suspend fun news(tickers: Collection<String>): Map<String, List<TickerNewsDto>> {
         if (tickers.isEmpty()) {
             return emptyMap()
         }
@@ -69,7 +69,7 @@ class FinnHubStockProvider(
         val fromDate = today.minusDays(7)
         val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
 
-        tickers.forEach { ticker ->
+        tickers.take(1).forEach { ticker ->
             try {
                 val response: List<FinnhubNewsItem> = client.get("${config.apiUri}/company-news") {
                     parameter("symbol", ticker)
@@ -91,7 +91,7 @@ class FinnHubStockProvider(
         return newsByTicker
     }
 
-    override suspend fun info(tickers: List<String>): Map<String, TickerInfoDto> {
+    override suspend fun info(tickers: Collection<String>): Map<String, TickerInfoDto> {
         if (tickers.isEmpty()) {
             return emptyMap()
         }
@@ -100,7 +100,7 @@ class FinnHubStockProvider(
         val infoByTicker = mutableMapOf<String, TickerInfoDto>()
 
         // Finnhub quote endpoint only supports one symbol at a time
-        tickers.forEach { ticker ->
+        tickers.take(1).forEach { ticker ->
             try {
                 val response: FinnhubQuote = client.get("${config.apiUri}/quote") {
                     parameter("symbol", ticker)

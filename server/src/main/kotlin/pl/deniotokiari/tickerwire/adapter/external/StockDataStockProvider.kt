@@ -65,7 +65,7 @@ class StockDataStockProvider(
      * Get news for tickers
      * GET https://api.stockdata.org/v1/news/all?symbols={tickers}
      */
-    override suspend fun news(tickers: List<String>): Map<String, List<TickerNewsDto>> {
+    override suspend fun news(tickers: Collection<String>): Map<String, List<TickerNewsDto>> {
         if (tickers.isEmpty()) {
             return emptyMap()
         }
@@ -116,7 +116,7 @@ class StockDataStockProvider(
      * Get stock quotes/info for tickers
      * GET https://api.stockdata.org/v1/data/quote?symbols={tickers}
      */
-    override suspend fun info(tickers: List<String>): Map<String, TickerInfoDto> {
+    override suspend fun info(tickers: Collection<String>): Map<String, TickerInfoDto> {
         if (tickers.isEmpty()) {
             return emptyMap()
         }

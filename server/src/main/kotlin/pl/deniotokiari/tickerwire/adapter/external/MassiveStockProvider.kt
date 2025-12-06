@@ -61,7 +61,7 @@ class MassiveStockProvider(
         } ?: emptyList()
     }
 
-    override suspend fun news(tickers: List<String>): Map<String, List<TickerNewsDto>> {
+    override suspend fun news(tickers: Collection<String>): Map<String, List<TickerNewsDto>> {
         if (tickers.isEmpty()) {
             return emptyMap()
         }
@@ -69,7 +69,7 @@ class MassiveStockProvider(
         val config = providerConfigService.get(Provider.MASSIVE)
         val newsByTicker = mutableMapOf<String, List<TickerNewsDto>>()
 
-        tickers.forEach { ticker ->
+        tickers.take(1).forEach { ticker ->
             try {
                 val response: MassiveNewsResponse = client.get("${config.apiUri}/v2/reference/news") {
                     parameter("ticker", ticker)
@@ -90,7 +90,7 @@ class MassiveStockProvider(
         return newsByTicker
     }
 
-    override suspend fun info(tickers: List<String>): Map<String, TickerInfoDto> {
+    override suspend fun info(tickers: Collection<String>): Map<String, TickerInfoDto> {
         if (tickers.isEmpty()) {
             return emptyMap()
         }
@@ -99,7 +99,7 @@ class MassiveStockProvider(
         val infoByTicker = mutableMapOf<String, TickerInfoDto>()
 
         // Use previous close endpoint for each ticker
-        tickers.forEach { ticker ->
+        tickers.take(1).forEach { ticker ->
             try {
                 val response: MassivePrevCloseResponse =
                     client.get("${config.apiUri}/v2/aggs/ticker/$ticker/prev") {

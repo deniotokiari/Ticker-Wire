@@ -50,7 +50,7 @@ class FinancialModelIngPrepProvider(
         }
     }
 
-    override suspend fun info(tickers: List<String>): Map<String, TickerInfoDto> {
+    override suspend fun info(tickers: Collection<String>): Map<String, TickerInfoDto> {
         if (tickers.isEmpty()) {
             return emptyMap()
         }
@@ -73,7 +73,7 @@ class FinancialModelIngPrepProvider(
             }
         } catch (_: Exception) {
             // Fallback to individual requests if bulk fails
-            tickers.forEach { ticker ->
+            tickers.take(1).forEach { ticker ->
                 try {
                     val response: List<FmpQuote> = client.get("${config.apiUri}/quote/$ticker") {
                         parameter("apikey", config.apiKey)

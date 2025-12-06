@@ -56,7 +56,7 @@ class MarketStackStockProvider(
      * Get latest EOD data for tickers
      * GET /eod/latest?symbols={tickers}
      */
-    override suspend fun info(tickers: List<String>): Map<String, TickerInfoDto> {
+    override suspend fun info(tickers: Collection<String>): Map<String, TickerInfoDto> {
         if (tickers.isEmpty()) {
             return emptyMap()
         }
