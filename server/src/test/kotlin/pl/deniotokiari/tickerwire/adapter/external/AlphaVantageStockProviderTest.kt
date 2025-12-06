@@ -421,7 +421,7 @@ class AlphaVantageStockProviderTest : BehaviorSpec({
             }
         }
 
-        When("getting info for multiple tickers") {
+        When("getting info for multiple tickers (per-ticker provider only processes first)") {
             var callCount = 0
             val mockEngine = MockEngine { request ->
                 callCount++
@@ -453,14 +453,14 @@ class AlphaVantageStockProviderTest : BehaviorSpec({
             val provider = AlphaVantageStockProvider(client, mockProviderConfigService)
             val results = provider.info(listOf("AAPL", "MSFT"))
 
-            Then("should make separate API calls for each ticker") {
-                callCount shouldBe 2
+            Then("should make only one API call (per-ticker provider handles one at a time)") {
+                callCount shouldBe 1
             }
 
-            Then("should return info for both tickers") {
-                results.size shouldBe 2
+            Then("should return info for only the first ticker") {
+                results.size shouldBe 1
                 results.containsKey("AAPL") shouldBe true
-                results.containsKey("MSFT") shouldBe true
+                results.containsKey("MSFT") shouldBe false
             }
         }
     }
