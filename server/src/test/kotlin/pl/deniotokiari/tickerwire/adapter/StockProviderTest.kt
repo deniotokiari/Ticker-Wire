@@ -135,8 +135,8 @@ class StockProviderTest : BehaviorSpec({
                 statsService = createMockStatsService(),
             )
 
-            Then("should throw NoAvailableProviderException") {
-                shouldThrow<NoAvailableProviderException> {
+            Then("should throw AllProvidersHaveReachedTheirLimitsException") {
+                shouldThrow<AllProvidersHaveReachedTheirLimitsException> {
                     stockProvider.search("AAPL")
                 }
             }

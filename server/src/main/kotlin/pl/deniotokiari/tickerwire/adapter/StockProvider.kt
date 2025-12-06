@@ -230,7 +230,7 @@ class StockProvider(
             )
 
         if (availableProviders.isEmpty()) {
-            throw NoAvailableProviderException("All providers have reached their limits")
+            throw AllProvidersHaveReachedTheirLimitsException()
         }
 
         // Select the highest priority provider (first in sorted list)
