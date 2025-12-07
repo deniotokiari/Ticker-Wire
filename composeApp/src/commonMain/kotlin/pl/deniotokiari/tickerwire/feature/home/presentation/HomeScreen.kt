@@ -184,8 +184,8 @@ private fun HomeContent(
                     .windowInsetsPadding(WindowInsets.ime),
                 message = stringResource(Res.string.error_failed_to_load_news_message),
                 action = stringResource(Res.string.error_failed_to_load_news_action),
-                onActionClick = {},
-                onCloseClick = {},
+                onActionClick = { onAction(HomeUiAction.OnErrorMessageActionClick) },
+                onCloseClick = { onAction(HomeUiAction.OnErrorMessageClose) },
             )
 
             HomeUiState.ErrorUiState.None -> Unit

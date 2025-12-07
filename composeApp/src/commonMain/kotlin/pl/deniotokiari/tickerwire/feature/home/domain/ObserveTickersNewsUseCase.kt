@@ -13,8 +13,6 @@ class ObserveTickersNewsUseCase(
 ) {
     operator fun invoke(tickers: Flow<List<Ticker>>): Flow<List<TickerNews>> =
         tickers.map { items ->
-            runCatching {
-                tickerRepository.news(items)
-            }.getOrNull() ?: emptyList()
+            tickerRepository.news(items)
         }
 }

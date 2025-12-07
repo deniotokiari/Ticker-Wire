@@ -9,4 +9,6 @@ sealed interface HomeUiAction {
     data class OnRemoveTicker(val item: Ticker) : HomeUiAction
     data class OnAddTicker(val item: Ticker) : HomeUiAction
     data class OnNewsClick(val ticker: String, val url: String?) : HomeUiAction
+    data object OnErrorMessageClose : HomeUiAction
+    data object OnErrorMessageActionClick : HomeUiAction
 }

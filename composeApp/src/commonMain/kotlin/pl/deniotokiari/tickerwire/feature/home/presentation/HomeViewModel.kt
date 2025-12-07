@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import org.koin.android.annotation.KoinViewModel
@@ -73,6 +74,29 @@ class HomeViewModel(
             HomeUiAction.OnSearchClick -> handleOnSearchClick()
             HomeUiAction.OnThemeChangeClick -> handleOnThemeChangeClick()
             is HomeUiAction.OnNewsClick -> handleOnNewsClick(action.ticker, action.url)
+            HomeUiAction.OnErrorMessageActionClick -> handleOnErrorMessageActionClick()
+            HomeUiAction.OnErrorMessageClose -> handleOnErrorMessageClose()
+        }
+    }
+
+    private fun handleOnErrorMessageActionClick() {
+        viewModelScope.launch {
+            _uiState.update { state ->
+                state.copy(
+                    errorUiState = HomeUiState.ErrorUiState.None,
+                    newsUiState = HomeUiState.NewsUiState.Loading,
+                )
+            }
+
+            delay(REFRESH_DELAY)
+
+            subscribeForUpdates()
+        }
+    }
+
+    private fun handleOnErrorMessageClose() {
+        _uiState.update { state ->
+            state.copy(errorUiState = HomeUiState.ErrorUiState.None)
         }
     }
 
@@ -90,19 +114,33 @@ class HomeViewModel(
         newsUpdatesJob?.cancel()
 
         infoUpdatesJob = viewModelScope.launch {
-            observeTickersInfoUseCase(observeWatchlistItemsUseCase()).collect { info ->
-                _uiState.update { state ->
-                    state.copy(info = info)
+            observeTickersInfoUseCase(observeWatchlistItemsUseCase())
+                .catch {
+                    emit(emptyMap())
+                    _uiState.update { state ->
+                        state.copy(errorUiState = HomeUiState.ErrorUiState.Error)
+                    }
                 }
-            }
+                .collect { info ->
+                    _uiState.update { state ->
+                        state.copy(info = info)
+                    }
+                }
         }
 
         newsUpdatesJob = viewModelScope.launch {
-            observeTickersNewsUseCase(observeWatchlistItemsUseCase()).collect { news ->
-                _uiState.update { state ->
-                    state.copy(newsUiState = HomeUiState.NewsUiState.Content(news))
+            observeTickersNewsUseCase(observeWatchlistItemsUseCase())
+                .catch {
+                    emit(emptyList())
+                    _uiState.update { state ->
+                        state.copy(errorUiState = HomeUiState.ErrorUiState.Error)
+                    }
                 }
-            }
+                .collect { news ->
+                    _uiState.update { state ->
+                        state.copy(newsUiState = HomeUiState.NewsUiState.Content(news))
+                    }
+                }
         }
     }
 

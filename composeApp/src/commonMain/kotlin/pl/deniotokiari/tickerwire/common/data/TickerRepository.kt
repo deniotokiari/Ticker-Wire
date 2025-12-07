@@ -73,7 +73,7 @@ class TickerRepository(
     }
 
     suspend fun news(tickers: List<Ticker>): List<TickerNews> {
-        val isOnline = !connectivityRepository.isOnline()
+        val isOnline = connectivityRepository.isOnline()
         val cached = mutableListOf<TickerNews>()
         val nonCached = mutableMapOf<String, Ticker>()
 
@@ -119,10 +119,17 @@ class TickerRepository(
         return cached
             .distinctBy { item -> item.title }
             .sortedByDescending { item -> item.timestamp }
+            .let { result ->
+                if (result.isEmpty() && !isOnline) {
+                    throw IllegalStateException()
+                } else {
+                    result
+                }
+            }
     }
 
     suspend fun info(tickers: List<Ticker>): Map<Ticker, TickerData> {
-        val isOnline = !connectivityRepository.isOnline()
+        val isOnline = connectivityRepository.isOnline()
         val cached = mutableMapOf<Ticker, TickerData>()
         val nonCached = mutableMapOf<String, Ticker>()
 
@@ -158,7 +165,13 @@ class TickerRepository(
                 }
         }
 
-        return cached
+        return cached.let { result ->
+            if (result.isEmpty() && !isOnline) {
+                throw IllegalStateException()
+            } else {
+                result
+            }
+        }
     }
 
     fun refresh() {
