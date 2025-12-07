@@ -7,11 +7,8 @@ import pl.deniotokiari.tickerwire.common.data.TickerRepository
 @Factory
 class RefreshUseCase(
     private val tickerRepository: TickerRepository,
-    private val connectivityRepository: ConnectivityRepository,
 ) {
     suspend operator fun invoke() {
-        if (connectivityRepository.isOnline()) {
-            tickerRepository.refresh()
-        }
+        tickerRepository.refresh()
     }
 }

@@ -175,6 +175,8 @@ class TickerRepository(
     }
 
     fun refresh() {
+        if (!connectivityRepository.isOnline()) return
+
         searchCache.clear()
         infoCache.clear()
         newsCache.clear()
