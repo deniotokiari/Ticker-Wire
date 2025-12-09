@@ -136,13 +136,13 @@ jobs:
           docker push $IMAGE_NAME:latest
 
       - name: Deploy to Cloud Run
-        uses: google-github-actions/deploy-cloudrun@v2
+        uses: google-github-actions/deploy-cloudrun@v3
         with:
           service: ${{ env.SERVICE_NAME }}
           image: ${{ env.IMAGE_NAME }}:${{ github.sha }}
           region: ${{ env.REGION }}
           secrets: |
-            firebase-key:1:latest=/app/serviceAccountKey.json
+            /app/serviceAccountKey.json=firebase-key:latest
           env_vars: |
             FIREBASE_CREDENTIALS_PATH=/app/serviceAccountKey.json
 
