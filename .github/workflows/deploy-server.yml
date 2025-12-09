@@ -142,7 +142,7 @@ jobs:
           image: ${{ env.IMAGE_NAME }}:${{ github.sha }}
           region: ${{ env.REGION }}
           secrets: |
-            firebase-key:latest=/app/serviceAccountKey.json
+            firebase-key:1=/app/serviceAccountKey.json
           env_vars: |
             FIREBASE_CREDENTIALS_PATH=/app/serviceAccountKey.json
 
