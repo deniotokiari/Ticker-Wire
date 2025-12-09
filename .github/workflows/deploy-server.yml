@@ -9,7 +9,7 @@ env:
   PROJECT_ID: ticker-wire
   SERVICE_NAME: ticker-wire-server
   REGION: europe-west1
-  IMAGE_NAME: gcr.io/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}
+  IMAGE_NAME: gcr.io/ticker-wire/ticker-wire-server
 
 jobs:
   build-server:
@@ -21,15 +21,13 @@ jobs:
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
+          distribution: temurin
           java-version: '17'
 
       - name: Setup Gradle
-        uses: gradle/actions@v3
-        with:
-          gradle-version: 8.x
+        uses: gradle/actions/setup-gradle@v3
 
-      - name: Create serviceAccountKey.json for application
+      - name: Create serviceAccountKey.json
         env:
           SERVICE_ACCOUNT_KEY: ${{ secrets.SERVICE_ACCOUNT_KEY_JSON }}
         run: |
@@ -37,8 +35,8 @@ jobs:
           echo "$SERVICE_ACCOUNT_KEY" > server/src/main/resources/serviceAccountKey.json
 
       - name: Build Server Distribution
-        run: gradle :server:installDist --no-daemon --info
-        
+        run: ./gradlew :server:installDist --no-daemon --info
+
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -55,15 +53,13 @@ jobs:
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
+          distribution: temurin
           java-version: '17'
 
       - name: Setup Gradle
-        uses: gradle/actions@v3
-        with:
-          gradle-version: 8.x
-          
-      - name: Create serviceAccountKey.json for application (for tests if needed)
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Create serviceAccountKey.json
         env:
           SERVICE_ACCOUNT_KEY: ${{ secrets.SERVICE_ACCOUNT_KEY_JSON }}
         run: |
@@ -71,11 +67,11 @@ jobs:
           echo "$SERVICE_ACCOUNT_KEY" > server/src/main/resources/serviceAccountKey.json
 
       - name: Run Server Tests
-        run: gradle :server:test --no-daemon --info
+        run: ./gradlew :server:test --no-daemon --info
 
   deploy-server:
     runs-on: ubuntu-latest
-    needs: [build-server, test-server] # Ensure build and tests pass before deployment
+    needs: [build-server, test-server]
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -87,34 +83,29 @@ jobs:
           path: server/build/install/server/
 
       - name: Google Auth
-        id: auth
-        uses: google-github-actions/auth@v1
+        uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
 
       - name: Set up Cloud SDK
-        uses: google-github-actions/setup-gcloud@v1
+        uses: google-github-actions/setup-gcloud@v2
         with:
           project_id: ${{ env.PROJECT_ID }}
 
-      - name: Configure Docker for Google Container Registry
+      - name: Configure Docker for GCR
         run: gcloud auth configure-docker gcr.io --quiet
 
       - name: Build and Push Docker Image
         run: |
-          docker build -t ${{ env.IMAGE_NAME }}:${{ github.sha }} -t ${{ env.IMAGE_NAME }}:latest .
-          docker push ${{ env.IMAGE_NAME }}:${{ github.sha }}
-          docker push ${{ env.IMAGE_NAME }}:latest
+          docker build -t $IMAGE_NAME:${{ github.sha }} -t $IMAGE_NAME:latest .
+          docker push $IMAGE_NAME:${{ github.sha }}
+          docker push $IMAGE_NAME:latest
 
       - name: Deploy to Cloud Run
-        uses: google-github-actions/deploy-cloudrun@v1
+        uses: google-github-actions/deploy-cloudrun@v2
         with:
           service: ${{ env.SERVICE_NAME }}
           image: ${{ env.IMAGE_NAME }}:${{ github.sha }}
           region: ${{ env.REGION }}
-          secrets: |
-            SERVICE_ACCOUNT_KEY_JSON=${{ secrets.SERVICE_ACCOUNT_KEY_JSON }}
-          secret_volume_mounts: |
-            SERVICE_ACCOUNT_KEY_JSON=/app/serviceAccountKey.json
           env_vars: |
             FIREBASE_CREDENTIALS_PATH=/app/serviceAccountKey.json
