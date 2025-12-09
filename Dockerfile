@@ -25,21 +25,21 @@ COPY server server
 RUN ./gradlew :server:installDist --no-daemon --info
 
 # Stage 2: Runtime
-FROM eclipse-temurin:17-jre-alpine
+FROM eclipse-temurin:17-jre-jammy AS runtime
 
-# Add non-root user
-RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+# Create non-root user and group (Ubuntu syntax)
+RUN groupadd -r appgroup && useradd -r -g appgroup appuser
 
-# Create app directory and set permissions
+# Create app directory and assign ownership
 RUN mkdir -p /app && chown -R appuser:appgroup /app
 
 WORKDIR /app
 
-# Copy distribution with permissions preserved
-COPY --from=build --chown=appuser:appgroup /app/server/build/install/server /app
+# Copy built distribution
+COPY --from=build /app/server/build/install/server /app
 
-# Ensure the startup script is executable (critical)
-RUN chmod +x /app/bin/server
+# Ensure server script is executable
+RUN chmod +x /app/bin/server && chown -R appuser:appgroup /app
 
 USER appuser
 
@@ -47,5 +47,6 @@ ENV PORT=8080
 EXPOSE 8080
 
 CMD ["/app/bin/server"]
+
 
 
