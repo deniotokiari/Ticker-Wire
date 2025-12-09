@@ -30,13 +30,16 @@ FROM eclipse-temurin:17-jre-alpine
 # Add non-root user for security
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 
+# Create mount path for secret before switching user
+RUN mkdir -p /app && chown -R appuser:appgroup /app
+
 WORKDIR /app
 
 # Copy the built distribution from build stage
 COPY --from=build /app/server/build/install/server .
 
-# Change ownership to non-root user
-RUN chown -R appuser:appgroup /app
+# Change ownership to non-root user (already done above)
+# RUN chown -R appuser:appgroup /app
 
 # Switch to non-root user
 USER appuser
