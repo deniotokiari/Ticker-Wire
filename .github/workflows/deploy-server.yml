@@ -5,6 +5,10 @@ on:
     branches:
       - prod/server
 
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   PROJECT_ID: ticker-wire
   SERVICE_NAME: ticker-wire-server

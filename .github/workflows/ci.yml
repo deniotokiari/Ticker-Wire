@@ -5,6 +5,10 @@ on:
     branches:
       - master
 
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4096M -Dfile.encoding=UTF-8"
   JAVA_VERSION: "17"
