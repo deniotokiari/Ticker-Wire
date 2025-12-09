@@ -34,9 +34,7 @@ object FirebaseConfig {
                     } else {
                         // Option 3: Try environment variable (for GCP)
                         try {
-                            FirebaseOptions.builder()
-                                .setCredentials(GoogleCredentials.getApplicationDefault())
-                                .build()
+                            FirebaseOptions.builder().setProjectId("ticker-wire").build()
                         } catch (e: Exception) {
                             throw IllegalStateException(
                                 "Firebase credentials not found. " +

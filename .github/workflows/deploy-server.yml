@@ -141,10 +141,6 @@ jobs:
           service: ${{ env.SERVICE_NAME }}
           image: ${{ env.IMAGE_NAME }}:${{ github.sha }}
           region: ${{ env.REGION }}
-          secrets: |
-            /app/serviceAccountKey.json=firebase-key:latest
-          env_vars: |
-            FIREBASE_CREDENTIALS_PATH=/app/serviceAccountKey.json
 
       - name: Create and push tag
         run: |
