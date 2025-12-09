@@ -22,36 +22,30 @@ COPY shared shared
 COPY server server
 
 # Build the server distribution
-RUN gradle :server:installDist --no-daemon --info
+RUN ./gradlew :server:installDist --no-daemon --info
 
 # Stage 2: Runtime
 FROM eclipse-temurin:17-jre-alpine
 
-# Add non-root user for security
+# Add non-root user
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 
-# Create mount path for secret before switching user
+# Create app directory and set permissions
 RUN mkdir -p /app && chown -R appuser:appgroup /app
 
 WORKDIR /app
 
-# Copy the built distribution from build stage
-COPY --from=build /app/server/build/install/server .
+# Copy distribution with permissions preserved
+COPY --from=build --chown=appuser:appgroup /app/server/build/install/server /app
 
-# Change ownership to non-root user (already done above)
-# RUN chown -R appuser:appgroup /app
+# Ensure the startup script is executable (critical)
+RUN chmod +x /app/bin/server
 
-# Switch to non-root user
 USER appuser
 
-# Cloud Run uses PORT environment variable
 ENV PORT=8080
 EXPOSE 8080
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD wget --no-verbose --tries=1 --spider http://localhost:${PORT}/health || exit 1
+CMD ["/app/bin/server"]
 
-# Run the server
-CMD ["./bin/server"]
 
