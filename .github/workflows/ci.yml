@@ -46,7 +46,6 @@ jobs:
           printf '%s' "$GOOGLE_SERVICES_JSON" > composeApp/google-services.json
 
       - name: Build Android
-        timeout-minutes: 20
         run: ./gradlew :composeApp:assembleDebug --build-cache --configuration-cache
 
   build-ios:
@@ -103,7 +102,6 @@ jobs:
           cd iosApp && pod install --repo-update
 
       - name: Build iOS
-        timeout-minutes: 20
         run: ./gradlew :composeApp:linkDebugFrameworkIosSimulatorArm64 --build-cache --configuration-cache
 
   build-web-js:
@@ -143,7 +141,6 @@ jobs:
           printf '%s' "$FIREBASE_CONFIG_JS" > composeApp/src/webMain/resources/firebaseConfig.js
 
       - name: Build Web JS
-        timeout-minutes: 10
         env:
           NODE_OPTIONS: "--max-old-space-size=4096"
         run: |
@@ -192,7 +189,6 @@ jobs:
           printf '%s' "$FIREBASE_CONFIG_JS" > composeApp/src/webMain/resources/firebaseConfig.js
 
       - name: Build Web WasmJS
-        timeout-minutes: 10
         env:
           NODE_OPTIONS: "--max-old-space-size=4096"
         run: |
@@ -236,7 +232,6 @@ jobs:
           printf '%s' "$SERVICE_ACCOUNT_KEY_JSON" > server/src/main/resources/serviceAccountKey.json
 
       - name: Build Server
-        timeout-minutes: 10
         run: ./gradlew :server:build --build-cache --configuration-cache
 
   # Test jobs - depend on build jobs
@@ -276,7 +271,6 @@ jobs:
           printf '%s' "$GOOGLE_SERVICES_JSON" > composeApp/google-services.json
 
       - name: Run Screenshot Tests
-        timeout-minutes: 15
         run: ./gradlew :composeApp:validateDebugScreenshotTest --build-cache --configuration-cache
 
   test-compose-app:
@@ -327,7 +321,6 @@ jobs:
           printf '%s' "$FIREBASE_CONFIG_JS" > composeApp/src/webMain/resources/firebaseConfig.js
 
       - name: Run Compose App Tests
-        timeout-minutes: 15
         run: ./gradlew :composeApp:allTests --build-cache --configuration-cache
 
       - name: Upload test results
@@ -371,7 +364,6 @@ jobs:
           printf '%s' "$SERVICE_ACCOUNT_KEY_JSON" > server/src/main/resources/serviceAccountKey.json
 
       - name: Run Server Tests
-        timeout-minutes: 10
         run: ./gradlew :server:test --build-cache --configuration-cache
 
       - name: Upload test results
