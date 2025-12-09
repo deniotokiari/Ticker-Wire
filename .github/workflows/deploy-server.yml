@@ -13,7 +13,7 @@ env:
   PROJECT_ID: ticker-wire
   SERVICE_NAME: ticker-wire-server
   REGION: europe-west1
-  IMAGE_NAME: gcr.io/ticker-wire/ticker-wire-server
+  IMAGE_NAME: europe-west1-docker.pkg.dev/ticker-wire/ticker-wire/ticker-wire-server
 
 jobs:
   build-server:
@@ -127,7 +127,7 @@ jobs:
           project_id: ${{ env.PROJECT_ID }}
 
       - name: Configure Docker for GCR
-        run: gcloud auth configure-docker gcr.io --quiet
+        run: gcloud auth configure-docker europe-west1-docker.pkg.dev --quiet
 
       - name: Build and Push Docker Image
         run: |
