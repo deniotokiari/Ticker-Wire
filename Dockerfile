@@ -1,9 +1,9 @@
 # Dockerfile for TickerWire Server
-# Uses pre-built artifacts (built in CI with proper Android SDK)
+# Uses pre-built artifacts from Gradle installDist
 
 FROM eclipse-temurin:17-jre-jammy
 
-# Create non-root user and group
+# Create non-root user for security
 RUN groupadd -r appgroup && useradd -r -g appgroup appuser
 
 # Create app directory
@@ -11,22 +11,22 @@ RUN mkdir -p /app && chown -R appuser:appgroup /app
 
 WORKDIR /app
 
-# Copy pre-built server distribution (prepared in CI)
-# We use a custom directory 'server-dist' to avoid .dockerignore issues with 'server/build'
-COPY server-dist/ /app/
+# Copy pre-built server distribution (built by Gradle installDist)
+COPY server/build/install/server/ /app/
 
-# Set permissions (just in case we need to execute scripts, though we use java directly now)
+# Copy Firebase service account credentials
+COPY server/src/main/resources/serviceAccountKey.json /app/serviceAccountKey.json
+
+# Set permissions
 RUN chmod +x /app/bin/server && chown -R appuser:appgroup /app
 
 USER appuser
 
-# Set environment variables
+# Cloud Run uses PORT environment variable
 ENV PORT=8080
-# The key is copied as part of server-dist/service-account.json
-ENV FIREBASE_CONFIG_PATH=/app/service-account.json
+ENV FIREBASE_CONFIG_PATH=/app/serviceAccountKey.json
 
 EXPOSE 8080
 
-# Run Java directly to avoid shell script issues
-# Classpath includes all jars in lib/ and the bin directory (for resources if any)
-ENTRYPOINT ["java", "-cp", "/app/lib/*", "pl.deniotokiari.tickerwire.ApplicationKt"]
+# Run the server
+CMD ["/app/bin/server"]

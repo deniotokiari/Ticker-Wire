@@ -16,7 +16,7 @@ env:
   IMAGE_NAME: europe-west1-docker.pkg.dev/ticker-wire/ticker-wire/ticker-wire-server
 
 jobs:
-  # Step 1: Validate version tag doesn't exist
+  # Job 1: Validate version tag doesn't exist
   validate-version:
     name: Validate Version Tag
     runs-on: ubuntu-latest
@@ -54,7 +54,7 @@ jobs:
             echo "✅ Tag $TAG does not exist, proceeding with deployment"
           fi
 
-  # Step 2: Build server to verify compilation
+  # Job 2: Build server
   build-server:
     name: Build Server
     runs-on: ubuntu-latest
@@ -80,15 +80,16 @@ jobs:
           printf '%s' "$SERVICE_ACCOUNT_KEY" > server/src/main/resources/serviceAccountKey.json
 
       - name: Build Server Distribution
-        run: ./gradlew :server:installDist --no-daemon --info
+        run: ./gradlew :server:installDist --no-daemon
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: server-distribution
           path: server/build/install/server/
+          retention-days: 1
 
-  # Step 3: Run server tests
+  # Job 3: Run server tests
   test-server:
     name: Test Server
     runs-on: ubuntu-latest
@@ -114,9 +115,9 @@ jobs:
           printf '%s' "$SERVICE_ACCOUNT_KEY" > server/src/main/resources/serviceAccountKey.json
 
       - name: Run Server Tests
-        run: ./gradlew :server:test --no-daemon --info
+        run: ./gradlew :server:test --no-daemon
 
-  # Step 4: Deploy to Cloud Run (only if build and tests pass)
+  # Job 4: Deploy to Cloud Run (only if build and tests pass)
   deploy-server:
     name: Deploy to Cloud Run
     runs-on: ubuntu-latest
@@ -131,31 +132,28 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: server-distribution
-          path: server-dist
+          path: server/build/install/server/
 
       - name: Verify build artifacts
         run: |
           echo "=== Downloaded artifacts ==="
-          ls -la server-dist/
-          ls -la server-dist/bin/
-          test -f server-dist/bin/server || (echo "❌ server binary not found in artifacts!" && exit 1)
-          echo "✅ Build artifacts downloaded successfully"
+          ls -la server/build/install/server/
+          ls -la server/build/install/server/bin/
+          test -f server/build/install/server/bin/server || (echo "❌ server binary not found!" && exit 1)
+          echo "✅ Build artifacts verified"
 
-      - name: Create service-account.json for Docker build
+      - name: Create serviceAccountKey.json for Docker
         env:
           SERVICE_ACCOUNT_KEY: ${{ secrets.SERVICE_ACCOUNT_KEY_JSON }}
         run: |
-          # Create file in server-dist to be copied with the application
-          # Using a different name to avoid .dockerignore patterns
-          printf '%s' "$SERVICE_ACCOUNT_KEY" > server-dist/service-account.json
+          mkdir -p server/src/main/resources
+          printf '%s' "$SERVICE_ACCOUNT_KEY" > server/src/main/resources/serviceAccountKey.json
           
-          # Verify the file was created and has content
-          if [ ! -s server-dist/service-account.json ]; then
-            echo "❌ server-dist/service-account.json is empty or not created!"
-            echo "Make sure SERVICE_ACCOUNT_KEY_JSON secret is set"
+          if [ ! -s server/src/main/resources/serviceAccountKey.json ]; then
+            echo "❌ serviceAccountKey.json is empty!"
             exit 1
           fi
-          echo "✅ service-account.json created ($(wc -c < server-dist/service-account.json) bytes)"
+          echo "✅ serviceAccountKey.json created"
 
       - name: Google Auth
         uses: google-github-actions/auth@v2
@@ -170,24 +168,10 @@ jobs:
       - name: Configure Docker for Artifact Registry
         run: gcloud auth configure-docker europe-west1-docker.pkg.dev --quiet
 
-      - name: Verify credentials file before Docker build
-        run: |
-          FILE="server-dist/service-account.json"
-          if [ ! -f "$FILE" ]; then
-            echo "❌ $FILE does not exist!"
-            exit 1
-          fi
-          # Check if it's valid JSON
-          if ! python3 -c "import json; json.load(open('$FILE'))"; then
-            echo "❌ $FILE is not valid JSON!"
-            exit 1
-          fi
-          echo "✅ $FILE exists and is valid JSON"
-
       - name: Build and Push Docker Image
         run: |
           VERSION="${{ needs.validate-version.outputs.version }}"
-          echo "🔨 Building Docker image with pre-built artifacts..."
+          echo "🔨 Building Docker image..."
           docker build \
             -t $IMAGE_NAME:${{ github.sha }} \
             -t $IMAGE_NAME:$VERSION \
@@ -197,7 +181,7 @@ jobs:
           docker push $IMAGE_NAME:${{ github.sha }}
           docker push $IMAGE_NAME:$VERSION
           docker push $IMAGE_NAME:latest
-          echo "✅ Docker image pushed with tags: ${{ github.sha }}, $VERSION, latest"
+          echo "✅ Docker images pushed with tags: ${{ github.sha }}, $VERSION, latest"
 
       - name: Deploy to Cloud Run
         uses: google-github-actions/deploy-cloudrun@v2
@@ -208,10 +192,23 @@ jobs:
 
       - name: Show deployment URL
         run: |
+          SERVICE_URL=$(gcloud run services describe ${{ env.SERVICE_NAME }} --region=${{ env.REGION }} --format='value(status.url)')
           echo "🚀 Deployment successful!"
-          echo "Service URL: https://${{ env.SERVICE_NAME }}-$(gcloud run services describe ${{ env.SERVICE_NAME }} --region=${{ env.REGION }} --format='value(status.url)' | sed 's/https:\/\///')"
+          echo "Service URL: $SERVICE_URL"
 
-      # Step 5: Push tag only after successful deployment
+  # Job 5: Push version tag (only after successful deployment)
+  push-tag:
+    name: Push Version Tag
+    runs-on: ubuntu-latest
+    needs: [validate-version, deploy-server]
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - name: Create and push version tag
         run: |
           TAG="${{ needs.validate-version.outputs.tag }}"
