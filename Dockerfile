@@ -15,7 +15,7 @@ WORKDIR /app
 # We use a custom directory 'server-dist' to avoid .dockerignore issues with 'server/build'
 COPY server-dist/ /app/
 
-# Set permissions
+# Set permissions (just in case we need to execute scripts, though we use java directly now)
 RUN chmod +x /app/bin/server && chown -R appuser:appgroup /app
 
 USER appuser
@@ -27,4 +27,6 @@ ENV FIREBASE_CONFIG_PATH=/app/service-account.json
 
 EXPOSE 8080
 
-CMD ["/app/bin/server"]
+# Run Java directly to avoid shell script issues
+# Classpath includes all jars in lib/ and the bin directory (for resources if any)
+ENTRYPOINT ["java", "-cp", "/app/lib/*", "pl.deniotokiari.tickerwire.ApplicationKt"]
