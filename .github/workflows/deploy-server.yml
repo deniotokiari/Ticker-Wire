@@ -127,6 +127,20 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: server-distribution
+          path: server/build/install/server/
+
+      - name: Verify build artifacts
+        run: |
+          echo "=== Downloaded artifacts ==="
+          ls -la server/build/install/server/
+          ls -la server/build/install/server/bin/
+          test -f server/build/install/server/bin/server || (echo "❌ server binary not found in artifacts!" && exit 1)
+          echo "✅ Build artifacts downloaded successfully"
+
       - name: Create serviceAccountKey.json for Docker build
         env:
           SERVICE_ACCOUNT_KEY: ${{ secrets.SERVICE_ACCOUNT_KEY_JSON }}
@@ -172,11 +186,13 @@ jobs:
       - name: Build and Push Docker Image
         run: |
           VERSION="${{ needs.validate-version.outputs.version }}"
+          echo "🔨 Building Docker image with pre-built artifacts..."
           docker build \
             -t $IMAGE_NAME:${{ github.sha }} \
             -t $IMAGE_NAME:$VERSION \
             -t $IMAGE_NAME:latest \
             .
+          echo "📤 Pushing Docker images..."
           docker push $IMAGE_NAME:${{ github.sha }}
           docker push $IMAGE_NAME:$VERSION
           docker push $IMAGE_NAME:latest
