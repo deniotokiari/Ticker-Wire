@@ -54,42 +54,7 @@ jobs:
             echo "✅ Tag $TAG does not exist, proceeding with deployment"
           fi
 
-  # Job 2: Build server
-  build-server:
-    name: Build Server
-    runs-on: ubuntu-latest
-    needs: validate-version
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
-
-      - name: Create serviceAccountKey.json
-        env:
-          SERVICE_ACCOUNT_KEY: ${{ secrets.SERVICE_ACCOUNT_KEY_JSON }}
-        run: |
-          mkdir -p server/src/main/resources
-          printf '%s' "$SERVICE_ACCOUNT_KEY" > server/src/main/resources/serviceAccountKey.json
-
-      - name: Build Server Distribution
-        run: ./gradlew :server:installDist --no-daemon
-
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: server-distribution
-          path: server/build/install/server/
-          retention-days: 1
-
-  # Job 3: Run server tests
+  # Job 2: Run server tests
   test-server:
     name: Test Server
     runs-on: ubuntu-latest
@@ -117,30 +82,16 @@ jobs:
       - name: Run Server Tests
         run: ./gradlew :server:test --no-daemon
 
-  # Job 4: Deploy to Cloud Run (only if build and tests pass)
+  # Job 3: Build and Deploy to Cloud Run
   deploy-server:
-    name: Deploy to Cloud Run
+    name: Build & Deploy to Cloud Run
     runs-on: ubuntu-latest
-    needs: [validate-version, build-server, test-server]
+    needs: [validate-version, test-server]
     permissions:
-      contents: write  # Required to push tags
+      contents: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
-      - name: Download build artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: server-distribution
-          path: server/build/install/server/
-
-      - name: Verify build artifacts
-        run: |
-          echo "=== Downloaded artifacts ==="
-          ls -la server/build/install/server/
-          ls -la server/build/install/server/bin/
-          test -f server/build/install/server/bin/server || (echo "❌ server binary not found!" && exit 1)
-          echo "✅ Build artifacts verified"
 
       - name: Create serviceAccountKey.json for Docker
         env:
@@ -171,7 +122,7 @@ jobs:
       - name: Build and Push Docker Image
         run: |
           VERSION="${{ needs.validate-version.outputs.version }}"
-          echo "🔨 Building Docker image..."
+          echo "🔨 Building Docker image (multi-stage build)..."
           docker build \
             -t $IMAGE_NAME:${{ github.sha }} \
             -t $IMAGE_NAME:$VERSION \
@@ -196,7 +147,7 @@ jobs:
           echo "🚀 Deployment successful!"
           echo "Service URL: $SERVICE_URL"
 
-  # Job 5: Push version tag (only after successful deployment)
+  # Job 4: Push version tag (only after successful deployment)
   push-tag:
     name: Push Version Tag
     runs-on: ubuntu-latest
@@ -218,4 +169,3 @@ jobs:
           git tag -a "$TAG" -m "Deploy server version $VERSION to Cloud Run"
           git push origin "$TAG"
           echo "✅ Created and pushed tag: $TAG"
-

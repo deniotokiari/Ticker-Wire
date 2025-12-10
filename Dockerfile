@@ -1,6 +1,24 @@
 # Dockerfile for TickerWire Server
-# Uses pre-built artifacts from Gradle installDist
+# Multi-stage build for reliability
 
+# Stage 1: Build
+FROM eclipse-temurin:17-jdk-jammy AS builder
+
+WORKDIR /build
+
+# Copy Gradle wrapper and build files first (for layer caching)
+COPY gradlew gradlew.bat ./
+COPY gradle/ gradle/
+COPY build.gradle.kts settings.gradle.kts gradle.properties ./
+
+# Copy project source files
+COPY shared/ shared/
+COPY server/ server/
+
+# Make gradlew executable and build
+RUN chmod +x gradlew && ./gradlew :server:installDist --no-daemon
+
+# Stage 2: Runtime
 FROM eclipse-temurin:17-jre-jammy
 
 # Create non-root user for security
@@ -11,10 +29,10 @@ RUN mkdir -p /app && chown -R appuser:appgroup /app
 
 WORKDIR /app
 
-# Copy pre-built server distribution (built by Gradle installDist)
-COPY server/build/install/server/ /app/
+# Copy built distribution from builder stage
+COPY --from=builder /build/server/build/install/server/ /app/
 
-# Copy Firebase service account credentials
+# Copy Firebase service account credentials (injected at build time)
 COPY server/src/main/resources/serviceAccountKey.json /app/serviceAccountKey.json
 
 # Set permissions

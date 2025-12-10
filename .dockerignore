@@ -1,0 +1,40 @@
+# Build outputs
+**/build/
+**/.gradle/
+
+# IDE files
+.idea/
+*.iml
+.vscode/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Documentation
+*.md
+
+# Local config files (except serviceAccountKey.json which we need)
+*.local
+.env
+.env.*
+
+# Test files (not needed for production build)
+**/src/test/
+**/src/*Test/
+**/src/screenshotTest/
+
+# Mobile/Web app modules (not needed for server)
+composeApp/
+iosApp/
+
+# Other
+*.log
+*.tmp
+kotlin-js-store/
+*.excalidraw
+
