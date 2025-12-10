@@ -211,17 +211,12 @@ jobs:
         run: |
           echo "=== Checking /app contents in Docker image ==="
           docker run --rm $IMAGE_NAME:${{ github.sha }} ls -la /app/
-          echo "=== Checking /app/bin contents ==="
-          docker run --rm $IMAGE_NAME:${{ github.sha }} ls -la /app/bin/
-          echo "=== Server script shebang line ==="
-          docker run --rm $IMAGE_NAME:${{ github.sha }} head -1 /app/bin/server
-          echo "=== Check for DOS line endings (CRLF) ==="
-          docker run --rm $IMAGE_NAME:${{ github.sha }} cat -A /app/bin/server | head -5
-          echo "=== Check if bash exists ==="
-          docker run --rm $IMAGE_NAME:${{ github.sha }} ls -la /bin/bash || echo "/bin/bash not found!"
-          docker run --rm $IMAGE_NAME:${{ github.sha }} ls -la /bin/sh || echo "/bin/sh not found!"
-          echo "=== File type ==="
-          docker run --rm $IMAGE_NAME:${{ github.sha }} file /app/bin/server || echo "file command not available"
+          echo "=== Checking /app/lib contents (JARs) ==="
+          docker run --rm $IMAGE_NAME:${{ github.sha }} ls -la /app/lib/ | head -20
+          echo "=== Check Java version ==="
+          docker run --rm $IMAGE_NAME:${{ github.sha }} java -version
+          echo "=== Test Java can find the main class ==="
+          docker run --rm $IMAGE_NAME:${{ github.sha }} java -cp "/app/lib/*" pl.deniotokiari.tickerwire.ApplicationKt --help 2>&1 | head -20 || echo "Note: Server may not support --help flag"
 
       - name: Push Docker Image
         run: |

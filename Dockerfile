@@ -34,4 +34,7 @@ ENV FIREBASE_CONFIG_PATH=/app/serviceAccountKey.json
 
 EXPOSE 8080
 
-CMD ["/app/bin/server"]
+# Run Java directly instead of using the Gradle-generated shell script
+# This avoids any shell/interpreter issues in Cloud Run
+# Using shell form to allow wildcard expansion
+CMD java -cp "/app/lib/*" pl.deniotokiari.tickerwire.ApplicationKt
