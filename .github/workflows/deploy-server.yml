@@ -110,17 +110,13 @@ jobs:
         with:
           project_id: ${{ env.PROJECT_ID }}
 
-      - name: Deploy to Cloud Run from Source
+      - name: Submit Build to Cloud Build
         run: |
-          VERSION="${{ needs.validate-version.outputs.version }}"
-          echo "🚀 Deploying to Cloud Run from source..."
-          gcloud run deploy ${{ env.SERVICE_NAME }} \
-            --source . \
-            --region ${{ env.REGION }} \
-            --platform managed \
-            --allow-unauthenticated \
-            --set-env-vars="FIREBASE_CONFIG_PATH=/app/serviceAccountKey.json" \
-            --tag "v${VERSION//\./-}"
+          echo "🚀 Submitting build to Cloud Build..."
+          gcloud builds submit \
+            --config=cloudbuild.yaml \
+            --substitutions=COMMIT_SHA=${{ github.sha }} \
+            .
 
       - name: Show deployment URL
         run: |

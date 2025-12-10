@@ -1,0 +1,59 @@
+steps:
+  # Build the Docker image with no cache
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '--no-cache'
+      - '-t'
+      - '${_IMAGE_NAME}:${COMMIT_SHA}'
+      - '-t'
+      - '${_IMAGE_NAME}:latest'
+      - '.'
+
+  # Verify the image contains the server binary
+  - name: 'gcr.io/cloud-builders/docker'
+    entrypoint: 'sh'
+    args:
+      - '-c'
+      - |
+        echo "🔍 Verifying Docker image contents..."
+        docker run --rm ${_IMAGE_NAME}:${COMMIT_SHA} ls -la /app/
+        docker run --rm ${_IMAGE_NAME}:${COMMIT_SHA} ls -la /app/bin/
+        docker run --rm ${_IMAGE_NAME}:${COMMIT_SHA} test -f /app/bin/server && echo "✅ Server binary exists" || (echo "❌ Server binary NOT FOUND" && exit 1)
+
+  # Push the image
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', '${_IMAGE_NAME}:${COMMIT_SHA}']
+
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', '${_IMAGE_NAME}:latest']
+
+  # Deploy to Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: 'gcloud'
+    args:
+      - 'run'
+      - 'deploy'
+      - '${_SERVICE_NAME}'
+      - '--image'
+      - '${_IMAGE_NAME}:${COMMIT_SHA}'
+      - '--region'
+      - '${_REGION}'
+      - '--platform'
+      - 'managed'
+      - '--allow-unauthenticated'
+      - '--set-env-vars'
+      - 'FIREBASE_CONFIG_PATH=/app/serviceAccountKey.json'
+
+substitutions:
+  _SERVICE_NAME: ticker-wire-server
+  _REGION: europe-west1
+  _IMAGE_NAME: europe-west1-docker.pkg.dev/ticker-wire/cloud-run-source-deploy/ticker-wire-server
+
+images:
+  - '${_IMAGE_NAME}:${COMMIT_SHA}'
+  - '${_IMAGE_NAME}:latest'
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+

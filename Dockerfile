@@ -1,5 +1,4 @@
 # Dockerfile for TickerWire Server
-# Used by Cloud Build for Cloud Run deployment
 
 FROM eclipse-temurin:17-jdk-jammy AS builder
 
@@ -26,8 +25,14 @@ COPY build.gradle.kts settings.gradle.kts gradle.properties ./
 COPY shared/ shared/
 COPY server/ server/
 
-# Build
-RUN chmod +x gradlew && ./gradlew :server:installDist --no-daemon
+# Build and verify output exists
+RUN chmod +x gradlew \
+    && ./gradlew :server:installDist --no-daemon \
+    && echo "=== Build complete, verifying output ===" \
+    && ls -la /build/server/build/install/server/ \
+    && ls -la /build/server/build/install/server/bin/ \
+    && test -f /build/server/build/install/server/bin/server \
+    && echo "✅ Server binary created successfully"
 
 # Runtime stage
 FROM eclipse-temurin:17-jre-jammy
@@ -40,7 +45,13 @@ WORKDIR /app
 COPY --from=builder /build/server/build/install/server/ /app/
 COPY server/src/main/resources/serviceAccountKey.json /app/serviceAccountKey.json
 
-RUN chmod +x /app/bin/server && chown -R app:app /app
+# Verify copy worked and set permissions
+RUN ls -la /app/ \
+    && ls -la /app/bin/ \
+    && test -f /app/bin/server || (echo "❌ COPY FAILED: /app/bin/server not found" && exit 1) \
+    && chmod +x /app/bin/server \
+    && chown -R app:app /app \
+    && echo "✅ Runtime image ready"
 
 USER app
 
