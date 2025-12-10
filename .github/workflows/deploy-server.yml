@@ -1,0 +1,223 @@
+name: Deploy Server to Cloud Run
+
+on:
+  push:
+    branches:
+      - prod/server
+
+concurrency:
+  group: deploy-server-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PROJECT_ID: ticker-wire
+  SERVICE_NAME: ticker-wire-server
+  REGION: europe-west1
+  IMAGE_NAME: europe-west1-docker.pkg.dev/ticker-wire/ticker-wire/ticker-wire-server
+
+jobs:
+  # Step 1: Validate version tag doesn't exist
+  validate-version:
+    name: Validate Version Tag
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.extract-version.outputs.version }}
+      tag: ${{ steps.extract-version.outputs.tag }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch all history for tags
+
+      - name: Extract version from build.gradle.kts
+        id: extract-version
+        run: |
+          VERSION=$(grep -E "^\s*version\s*=" server/build.gradle.kts | sed -E 's/.*version\s*=\s*"([^"]+)".*/\1/')
+          if [ -z "$VERSION" ]; then
+            echo "❌ Failed to extract version from server/build.gradle.kts"
+            exit 1
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tag=prod/server/$VERSION" >> $GITHUB_OUTPUT
+          echo "📦 Extracted version: $VERSION"
+          echo "🏷️  Tag will be: prod/server/$VERSION"
+
+      - name: Check if tag already exists
+        run: |
+          TAG="${{ steps.extract-version.outputs.tag }}"
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "❌ Tag $TAG already exists!"
+            echo "This version has already been deployed."
+            echo "Please update the version in server/build.gradle.kts"
+            exit 1
+          else
+            echo "✅ Tag $TAG does not exist, proceeding with deployment"
+          fi
+
+  # Step 2: Build server to verify compilation
+  build-server:
+    name: Build Server
+    runs-on: ubuntu-latest
+    needs: validate-version
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Create serviceAccountKey.json
+        env:
+          SERVICE_ACCOUNT_KEY: ${{ secrets.SERVICE_ACCOUNT_KEY_JSON }}
+        run: |
+          mkdir -p server/src/main/resources
+          printf '%s' "$SERVICE_ACCOUNT_KEY" > server/src/main/resources/serviceAccountKey.json
+
+      - name: Build Server Distribution
+        run: ./gradlew :server:installDist --no-daemon --info
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: server-distribution
+          path: server/build/install/server/
+
+  # Step 3: Run server tests
+  test-server:
+    name: Test Server
+    runs-on: ubuntu-latest
+    needs: validate-version
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Create serviceAccountKey.json
+        env:
+          SERVICE_ACCOUNT_KEY: ${{ secrets.SERVICE_ACCOUNT_KEY_JSON }}
+        run: |
+          mkdir -p server/src/main/resources
+          printf '%s' "$SERVICE_ACCOUNT_KEY" > server/src/main/resources/serviceAccountKey.json
+
+      - name: Run Server Tests
+        run: ./gradlew :server:test --no-daemon --info
+
+  # Step 4: Deploy to Cloud Run (only if build and tests pass)
+  deploy-server:
+    name: Deploy to Cloud Run
+    runs-on: ubuntu-latest
+    needs: [validate-version, build-server, test-server]
+    permissions:
+      contents: write  # Required to push tags
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: server-distribution
+          path: server/build/install/server/
+
+      - name: Verify build artifacts
+        run: |
+          echo "=== Downloaded artifacts ==="
+          ls -la server/build/install/server/
+          ls -la server/build/install/server/bin/
+          test -f server/build/install/server/bin/server || (echo "❌ server binary not found in artifacts!" && exit 1)
+          echo "✅ Build artifacts downloaded successfully"
+
+      - name: Create serviceAccountKey.json for Docker build
+        env:
+          SERVICE_ACCOUNT_KEY: ${{ secrets.SERVICE_ACCOUNT_KEY_JSON }}
+        run: |
+          mkdir -p server/src/main/resources
+          printf '%s' "$SERVICE_ACCOUNT_KEY" > server/src/main/resources/serviceAccountKey.json
+          
+          # Verify the file was created and has content
+          if [ ! -s server/src/main/resources/serviceAccountKey.json ]; then
+            echo "❌ serviceAccountKey.json is empty or not created!"
+            echo "Make sure SERVICE_ACCOUNT_KEY_JSON secret is set"
+            exit 1
+          fi
+          echo "✅ serviceAccountKey.json created ($(wc -c < server/src/main/resources/serviceAccountKey.json) bytes)"
+
+      - name: Google Auth
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker europe-west1-docker.pkg.dev --quiet
+
+      - name: Verify credentials file before Docker build
+        run: |
+          FILE="server/src/main/resources/serviceAccountKey.json"
+          if [ ! -f "$FILE" ]; then
+            echo "❌ $FILE does not exist!"
+            exit 1
+          fi
+          # Check if it's valid JSON
+          if ! python3 -c "import json; json.load(open('$FILE'))"; then
+            echo "❌ $FILE is not valid JSON!"
+            exit 1
+          fi
+          echo "✅ $FILE exists and is valid JSON"
+
+      - name: Build and Push Docker Image
+        run: |
+          VERSION="${{ needs.validate-version.outputs.version }}"
+          echo "🔨 Building Docker image with pre-built artifacts..."
+          docker build \
+            -t $IMAGE_NAME:${{ github.sha }} \
+            -t $IMAGE_NAME:$VERSION \
+            -t $IMAGE_NAME:latest \
+            .
+          echo "📤 Pushing Docker images..."
+          docker push $IMAGE_NAME:${{ github.sha }}
+          docker push $IMAGE_NAME:$VERSION
+          docker push $IMAGE_NAME:latest
+          echo "✅ Docker image pushed with tags: ${{ github.sha }}, $VERSION, latest"
+
+      - name: Deploy to Cloud Run
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: ${{ env.SERVICE_NAME }}
+          image: ${{ env.IMAGE_NAME }}:${{ github.sha }}
+          region: ${{ env.REGION }}
+
+      - name: Show deployment URL
+        run: |
+          echo "🚀 Deployment successful!"
+          echo "Service URL: https://${{ env.SERVICE_NAME }}-$(gcloud run services describe ${{ env.SERVICE_NAME }} --region=${{ env.REGION }} --format='value(status.url)' | sed 's/https:\/\///')"
+
+      # Step 5: Push tag only after successful deployment
+      - name: Create and push version tag
+        run: |
+          TAG="${{ needs.validate-version.outputs.tag }}"
+          VERSION="${{ needs.validate-version.outputs.version }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" -m "Deploy server version $VERSION to Cloud Run"
+          git push origin "$TAG"
+          echo "✅ Created and pushed tag: $TAG"
+
