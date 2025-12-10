@@ -11,11 +11,9 @@ RUN mkdir -p /app && chown -R appuser:appgroup /app
 
 WORKDIR /app
 
-# Copy pre-built server distribution (built in CI)
-COPY server/build/install/server/ /app/
-
-# Copy Firebase credentials (injected at build time in CI)
-COPY server/src/main/resources/serviceAccountKey.json /app/serviceAccountKey.json
+# Copy pre-built server distribution (prepared in CI)
+# We use a custom directory 'server-dist' to avoid .dockerignore issues with 'server/build'
+COPY server-dist/ /app/
 
 # Set permissions
 RUN chmod +x /app/bin/server && chown -R appuser:appgroup /app
@@ -24,7 +22,8 @@ USER appuser
 
 # Set environment variables
 ENV PORT=8080
-ENV FIREBASE_CONFIG_PATH=/app/serviceAccountKey.json
+# The key is copied as part of server-dist/service-account.json
+ENV FIREBASE_CONFIG_PATH=/app/service-account.json
 
 EXPOSE 8080
 

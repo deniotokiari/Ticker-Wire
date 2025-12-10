@@ -131,30 +131,31 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: server-distribution
-          path: server/build/install/server/
+          path: server-dist
 
       - name: Verify build artifacts
         run: |
           echo "=== Downloaded artifacts ==="
-          ls -la server/build/install/server/
-          ls -la server/build/install/server/bin/
-          test -f server/build/install/server/bin/server || (echo "❌ server binary not found in artifacts!" && exit 1)
+          ls -la server-dist/
+          ls -la server-dist/bin/
+          test -f server-dist/bin/server || (echo "❌ server binary not found in artifacts!" && exit 1)
           echo "✅ Build artifacts downloaded successfully"
 
-      - name: Create serviceAccountKey.json for Docker build
+      - name: Create service-account.json for Docker build
         env:
           SERVICE_ACCOUNT_KEY: ${{ secrets.SERVICE_ACCOUNT_KEY_JSON }}
         run: |
-          mkdir -p server/src/main/resources
-          printf '%s' "$SERVICE_ACCOUNT_KEY" > server/src/main/resources/serviceAccountKey.json
+          # Create file in server-dist to be copied with the application
+          # Using a different name to avoid .dockerignore patterns
+          printf '%s' "$SERVICE_ACCOUNT_KEY" > server-dist/service-account.json
           
           # Verify the file was created and has content
-          if [ ! -s server/src/main/resources/serviceAccountKey.json ]; then
-            echo "❌ serviceAccountKey.json is empty or not created!"
+          if [ ! -s server-dist/service-account.json ]; then
+            echo "❌ server-dist/service-account.json is empty or not created!"
             echo "Make sure SERVICE_ACCOUNT_KEY_JSON secret is set"
             exit 1
           fi
-          echo "✅ serviceAccountKey.json created ($(wc -c < server/src/main/resources/serviceAccountKey.json) bytes)"
+          echo "✅ service-account.json created ($(wc -c < server-dist/service-account.json) bytes)"
 
       - name: Google Auth
         uses: google-github-actions/auth@v2
