@@ -222,8 +222,6 @@ jobs:
           docker run --rm $IMAGE_NAME:${{ github.sha }} ls -la /bin/sh || echo "/bin/sh not found!"
           echo "=== File type ==="
           docker run --rm $IMAGE_NAME:${{ github.sha }} file /app/bin/server || echo "file command not available"
-          echo "=== Try running the server script ==="
-          docker run --rm --entrypoint /bin/sh $IMAGE_NAME:${{ github.sha }} -c "/app/bin/server --help" 2>&1 || echo "Server script execution failed"
 
       - name: Push Docker Image
         run: |
