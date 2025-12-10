@@ -41,8 +41,11 @@ COPY --from=builder /build/server/build/libs/*-all.jar /app/server.jar
 # Copy service account key
 COPY server/src/main/resources/serviceAccountKey.json /app/serviceAccountKey.json
 
-# Verify
-RUN ls -la /app/ && test -f /app/server.jar && echo "✅ server.jar exists"
+# Verify and set permissions (Cloud Run runs as non-root)
+RUN ls -la /app/ && test -f /app/server.jar && echo "✅ server.jar exists" \
+    && chmod 644 /app/server.jar \
+    && chmod 644 /app/serviceAccountKey.json \
+    && chmod 755 /app
 
 ENV PORT=8080
 ENV FIREBASE_CONFIG_PATH=/app/serviceAccountKey.json
