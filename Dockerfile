@@ -53,5 +53,5 @@ ENV FIREBASE_CONFIG_PATH=/app/serviceAccountKey.json
 
 EXPOSE 8080
 
-# Run Java directly
-ENTRYPOINT ["java", "-XX:+UseContainerSupport", "-XX:MaxRAMPercentage=75.0", "-cp", "/app/lib/*", "pl.deniotokiari.tickerwire.ApplicationKt"]
+# Run Java directly (use shell form so wildcard expands)
+CMD java -XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -cp "/app/lib/*" pl.deniotokiari.tickerwire.ApplicationKt
