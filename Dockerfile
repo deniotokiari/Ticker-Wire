@@ -18,47 +18,43 @@ RUN apt-get update && apt-get install -y --no-install-recommends unzip wget dos2
 
 WORKDIR /build
 
-# Copy build files
 COPY gradlew gradlew.bat ./
 COPY gradle/ gradle/
 COPY build.gradle.kts settings.gradle.kts gradle.properties ./
 COPY shared/ shared/
 COPY server/ server/
 
-# Build and fix line endings
-RUN dos2unix gradlew \
-    && chmod +x gradlew \
+# Build
+RUN dos2unix gradlew && chmod +x gradlew \
     && ./gradlew :server:installDist --no-daemon \
     && dos2unix /build/server/build/install/server/bin/server \
-    && chmod +x /build/server/build/install/server/bin/server \
-    && echo "=== Build complete ===" \
-    && ls -la /build/server/build/install/server/bin/ \
-    && ls /build/server/build/install/server/lib/ | grep -i server
+    && chmod +x /build/server/build/install/server/bin/server
 
-# Runtime stage
-FROM eclipse-temurin:17-jre-jammy
+# Runtime - use simpler base
+FROM debian:bookworm-slim
+
+# Install JRE
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    openjdk-17-jre-headless \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Copy BOTH bin and lib folders from builder
-COPY --from=builder /build/server/build/install/server/bin/ /app/bin/
-COPY --from=builder /build/server/build/install/server/lib/ /app/lib/
+# Copy entire server distribution directory
+COPY --from=builder /build/server/build/install/server/ /app/
 
 # Copy service account key
 COPY server/src/main/resources/serviceAccountKey.json /app/serviceAccountKey.json
 
-# Verify and set permissions
-RUN ls -la /app/ \
-    && ls -la /app/bin/ \
-    && ls -la /app/lib/ | head -10 \
-    && chmod +x /app/bin/server \
-    && echo "✅ All files present"
+# Debug: show what was copied
+RUN echo "=== /app contents ===" && ls -laR /app/ && echo "=== End ===" \
+    && test -f /app/bin/server && echo "✅ server script exists" \
+    && chmod +x /app/bin/server
 
 ENV PORT=8080
 ENV FIREBASE_CONFIG_PATH=/app/serviceAccountKey.json
+ENV JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
 
 EXPOSE 8080
 
-# Override eclipse-temurin entrypoint and run script through sh explicitly
-ENTRYPOINT ["/bin/sh"]
 CMD ["/app/bin/server"]
