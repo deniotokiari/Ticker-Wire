@@ -6,7 +6,7 @@ FROM eclipse-temurin:17-jdk-jammy AS builder
 ENV ANDROID_HOME=/opt/android-sdk
 ENV PATH="${PATH}:${ANDROID_HOME}/cmdline-tools/latest/bin"
 
-RUN apt-get update && apt-get install -y --no-install-recommends unzip wget \
+RUN apt-get update && apt-get install -y --no-install-recommends unzip wget dos2unix \
     && rm -rf /var/lib/apt/lists/* \
     && mkdir -p ${ANDROID_HOME}/cmdline-tools \
     && wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -O /tmp/tools.zip \
@@ -25,13 +25,14 @@ COPY build.gradle.kts settings.gradle.kts gradle.properties ./
 COPY shared/ shared/
 COPY server/ server/
 
-# Build
-RUN chmod +x gradlew \
+# Build and fix line endings
+RUN dos2unix gradlew \
+    && chmod +x gradlew \
     && ./gradlew :server:installDist --no-daemon \
+    && dos2unix /build/server/build/install/server/bin/server \
+    && chmod +x /build/server/build/install/server/bin/server \
     && echo "=== Build complete ===" \
-    && echo "=== Full install directory ===" \
-    && ls -laR /build/server/build/install/server/ \
-    && echo "=== Looking for server JAR ===" \
+    && ls -la /build/server/build/install/server/bin/ \
     && ls /build/server/build/install/server/lib/ | grep -i server
 
 # Runtime stage
@@ -39,19 +40,24 @@ FROM eclipse-temurin:17-jre-jammy
 
 WORKDIR /app
 
-# Copy JARs from builder
+# Copy BOTH bin and lib folders from builder
+COPY --from=builder /build/server/build/install/server/bin/ /app/bin/
 COPY --from=builder /build/server/build/install/server/lib/ /app/lib/
 
-# Copy service account key directly (created by CI before docker build)
+# Copy service account key
 COPY server/src/main/resources/serviceAccountKey.json /app/serviceAccountKey.json
 
-# Verify
-RUN ls -la /app/ && ls -la /app/lib/ | head -10 && test -f /app/serviceAccountKey.json && echo "✅ All files present"
+# Verify and set permissions
+RUN ls -la /app/ \
+    && ls -la /app/bin/ \
+    && ls -la /app/lib/ | head -10 \
+    && chmod +x /app/bin/server \
+    && echo "✅ All files present"
 
 ENV PORT=8080
 ENV FIREBASE_CONFIG_PATH=/app/serviceAccountKey.json
 
 EXPOSE 8080
 
-# Run Java directly (use shell form so wildcard expands)
-CMD java -XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -cp "/app/lib/*" pl.deniotokiari.tickerwire.ApplicationKt
+# Use Gradle's generated script (has correct classpath)
+CMD ["/app/bin/server"]
