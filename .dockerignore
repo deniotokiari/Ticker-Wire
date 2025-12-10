@@ -2,6 +2,11 @@
 **/build/
 **/.gradle/
 
+# But include server distribution for Docker
+!server/build/
+!server/build/install/
+!server/build/install/**
+
 # IDE files
 .idea/
 *.iml

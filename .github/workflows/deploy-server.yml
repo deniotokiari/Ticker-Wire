@@ -135,9 +135,15 @@ jobs:
 
       - name: Verify build artifacts
         run: |
-          echo "=== Downloaded artifacts ==="
-          ls -la server/build/install/server/
-          ls -la server/build/install/server/bin/
+          echo "=== Workspace structure ==="
+          pwd
+          ls -la
+          echo "=== Server directory ==="
+          ls -la server/ || echo "server/ not found"
+          echo "=== Build directory ==="
+          ls -laR server/build/ || echo "server/build/ not found"
+          echo "=== Checking for server binary ==="
+          find . -name "server" -type f 2>/dev/null || echo "No server binary found"
           test -f server/build/install/server/bin/server || (echo "❌ server binary not found in artifacts!" && exit 1)
           echo "✅ Build artifacts downloaded successfully"
 
