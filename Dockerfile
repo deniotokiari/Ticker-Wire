@@ -59,5 +59,6 @@ ENV FIREBASE_CONFIG_PATH=/app/serviceAccountKey.json
 
 EXPOSE 8080
 
-# Use Gradle's generated script (has correct classpath)
+# Override eclipse-temurin entrypoint and run script through sh explicitly
+ENTRYPOINT ["/bin/sh"]
 CMD ["/app/bin/server"]
