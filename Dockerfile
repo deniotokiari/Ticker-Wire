@@ -25,52 +25,34 @@ COPY build.gradle.kts settings.gradle.kts gradle.properties ./
 COPY shared/ shared/
 COPY server/ server/
 
-# Install dos2unix for line ending fixes
-RUN apt-get update && apt-get install -y --no-install-recommends dos2unix \
-    && rm -rf /var/lib/apt/lists/*
-
-# Fix gradlew line endings and build
-RUN dos2unix gradlew \
-    && chmod +x gradlew \
+# Build
+RUN chmod +x gradlew \
     && ./gradlew :server:installDist --no-daemon \
-    && echo "=== Build complete, verifying output ===" \
+    && echo "=== Build complete ===" \
     && ls -la /build/server/build/install/server/ \
-    && ls -la /build/server/build/install/server/bin/ \
-    && test -f /build/server/build/install/server/bin/server \
-    && dos2unix /build/server/build/install/server/bin/server \
-    && echo "Shebang line:" && head -1 /build/server/build/install/server/bin/server | od -c | head -1 \
-    && echo "✅ Server binary created successfully"
+    && ls -la /build/server/build/install/server/lib/ | head -10
 
 # Runtime stage
 FROM eclipse-temurin:17-jre-jammy
 
-RUN groupadd -r app && useradd -r -g app app \
-    && mkdir -p /app && chown -R app:app /app
-
 WORKDIR /app
 
-# Copy server distribution
-COPY --from=builder /build/server/build/install/server/ /app/
+# Copy only the lib folder (JAR files)
+COPY --from=builder /build/server/build/install/server/lib/ /app/lib/
 
-# Copy service account key if it exists (optional - Cloud Run can use ADC)
-COPY server/src/main/resources/serviceAccountKey.jso[n] /app/
+# Copy service account key if provided
+ARG SERVICE_ACCOUNT_KEY_CONTENT
+RUN if [ -n "$SERVICE_ACCOUNT_KEY_CONTENT" ]; then \
+        echo "$SERVICE_ACCOUNT_KEY_CONTENT" > /app/serviceAccountKey.json; \
+    fi
 
-# Fix line endings (Windows CRLF -> Unix LF) and set permissions
-RUN apt-get update && apt-get install -y --no-install-recommends dos2unix \
-    && rm -rf /var/lib/apt/lists/* \
-    && ls -la /app/ \
-    && ls -la /app/bin/ \
-    && test -f /app/bin/server || (echo "❌ /app/bin/server not found" && exit 1) \
-    && dos2unix /app/bin/server \
-    && chmod +x /app/bin/server \
-    && chown -R app:app /app \
-    && echo "✅ Runtime image ready"
-
-USER app
+# Verify
+RUN ls -la /app/ && ls -la /app/lib/ | head -10
 
 ENV PORT=8080
 ENV FIREBASE_CONFIG_PATH=/app/serviceAccountKey.json
 
 EXPOSE 8080
 
-CMD ["/app/bin/server"]
+# Run Java directly instead of using the shell script
+ENTRYPOINT ["java", "-XX:+UseContainerSupport", "-XX:MaxRAMPercentage=75.0", "-cp", "/app/lib/*", "pl.deniotokiari.tickerwire.ApplicationKt"]

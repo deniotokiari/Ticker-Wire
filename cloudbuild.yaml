@@ -1,14 +1,24 @@
 steps:
-  # Build the Docker image with no cache
+  # Build the Docker image
   - name: 'gcr.io/cloud-builders/docker'
+    entrypoint: 'bash'
     args:
-      - 'build'
-      - '--no-cache'
-      - '-t'
-      - '${_IMAGE_NAME}:${COMMIT_SHA}'
-      - '-t'
-      - '${_IMAGE_NAME}:latest'
-      - '.'
+      - '-c'
+      - |
+        # Read service account key if it exists
+        if [ -f "server/src/main/resources/serviceAccountKey.json" ]; then
+          SERVICE_KEY=$(cat server/src/main/resources/serviceAccountKey.json | base64 -w 0)
+          docker build --no-cache \
+            --build-arg SERVICE_ACCOUNT_KEY_CONTENT="$(cat server/src/main/resources/serviceAccountKey.json)" \
+            -t ${_IMAGE_NAME}:${COMMIT_SHA} \
+            -t ${_IMAGE_NAME}:latest \
+            .
+        else
+          docker build --no-cache \
+            -t ${_IMAGE_NAME}:${COMMIT_SHA} \
+            -t ${_IMAGE_NAME}:latest \
+            .
+        fi
 
   # Verify the image contents
   - name: 'gcr.io/cloud-builders/docker'
@@ -18,16 +28,11 @@ steps:
       - |
         echo "🔍 Verifying Docker image contents..."
         docker run --rm ${_IMAGE_NAME}:${COMMIT_SHA} ls -la /app/
-        docker run --rm ${_IMAGE_NAME}:${COMMIT_SHA} ls -la /app/bin/
         docker run --rm ${_IMAGE_NAME}:${COMMIT_SHA} ls -la /app/lib/ | head -20
-        docker run --rm ${_IMAGE_NAME}:${COMMIT_SHA} test -f /app/bin/server && echo "✅ Server binary exists" || (echo "❌ Server binary NOT FOUND" && exit 1)
-        docker run --rm ${_IMAGE_NAME}:${COMMIT_SHA} test -f /app/serviceAccountKey.json && echo "✅ Firebase credentials file exists" || echo "⚠️ No credentials file (will use ADC on Cloud Run)"
-        echo "📄 First 5 lines of server script:"
-        docker run --rm ${_IMAGE_NAME}:${COMMIT_SHA} head -5 /app/bin/server
-        echo "🔍 Checking for Windows line endings (should show no \\r):"
-        docker run --rm ${_IMAGE_NAME}:${COMMIT_SHA} head -1 /app/bin/server | od -c | head -1
-        echo "🔍 Trying to execute server --help:"
-        docker run --rm ${_IMAGE_NAME}:${COMMIT_SHA} /bin/sh -c "test -x /app/bin/server && echo 'Script is executable'" || echo "Script not executable"
+        echo "🔍 Testing Java execution..."
+        docker run --rm ${_IMAGE_NAME}:${COMMIT_SHA} java -version
+        echo "🔍 Testing classpath..."
+        docker run --rm ${_IMAGE_NAME}:${COMMIT_SHA} ls /app/lib/server*.jar || echo "Server JAR check"
         echo "✅ Verification complete"
 
   # Push the image
@@ -48,7 +53,7 @@ steps:
           --region ${_REGION} \
           --platform managed \
           --allow-unauthenticated \
-          --set-env-vars "FIREBASE_CONFIG_PATH=/app/serviceAccountKey.json,JAVA_TOOL_OPTIONS=-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0" \
+          --set-env-vars "FIREBASE_CONFIG_PATH=/app/serviceAccountKey.json" \
           --timeout 300 \
           --cpu-boost \
           --min-instances 0 \
@@ -67,4 +72,3 @@ images:
 
 options:
   logging: CLOUD_LOGGING_ONLY
-
