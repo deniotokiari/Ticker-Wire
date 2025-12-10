@@ -13,7 +13,6 @@ env:
   PROJECT_ID: ticker-wire
   SERVICE_NAME: ticker-wire-server
   REGION: europe-west1
-  IMAGE_NAME: europe-west1-docker.pkg.dev/ticker-wire/ticker-wire/ticker-wire-server
 
 jobs:
   # Job 1: Validate version tag doesn't exist
@@ -27,7 +26,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Fetch all history for tags
+          fetch-depth: 0
 
       - name: Extract version from build.gradle.kts
         id: extract-version
@@ -85,29 +84,21 @@ jobs:
       - name: Run Server Tests
         run: ./gradlew :server:test --no-daemon
 
-  # Job 3: Build and Deploy to Cloud Run
+  # Job 3: Deploy to Cloud Run (builds from source)
   deploy-server:
-    name: Build & Deploy to Cloud Run
+    name: Deploy to Cloud Run
     runs-on: ubuntu-latest
     needs: [validate-version, test-server]
-    permissions:
-      contents: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Create serviceAccountKey.json for Docker
+      - name: Create serviceAccountKey.json
         env:
           SERVICE_ACCOUNT_KEY: ${{ secrets.SERVICE_ACCOUNT_KEY_JSON }}
         run: |
           mkdir -p server/src/main/resources
           printf '%s' "$SERVICE_ACCOUNT_KEY" > server/src/main/resources/serviceAccountKey.json
-          
-          if [ ! -s server/src/main/resources/serviceAccountKey.json ]; then
-            echo "❌ serviceAccountKey.json is empty!"
-            exit 1
-          fi
-          echo "✅ serviceAccountKey.json created"
 
       - name: Google Auth
         uses: google-github-actions/auth@v2
@@ -119,51 +110,17 @@ jobs:
         with:
           project_id: ${{ env.PROJECT_ID }}
 
-      - name: Configure Docker for Artifact Registry
-        run: gcloud auth configure-docker europe-west1-docker.pkg.dev --quiet
-
-      - name: Build Docker Image
+      - name: Deploy to Cloud Run from Source
         run: |
           VERSION="${{ needs.validate-version.outputs.version }}"
-          echo "🔨 Building Docker image (multi-stage build, linux/amd64)..."
-          docker build --no-cache --progress=plain --platform linux/amd64 \
-            -t $IMAGE_NAME:${{ github.sha }} \
-            -t $IMAGE_NAME:$VERSION \
-            -t $IMAGE_NAME:latest \
-            .
-
-      - name: Verify Docker Image
-        run: |
-          echo "🔍 Verifying Docker image contents..."
-          docker run --rm --platform linux/amd64 $IMAGE_NAME:${{ github.sha }} ls -la /app/
-          docker run --rm --platform linux/amd64 $IMAGE_NAME:${{ github.sha }} ls -la /app/bin/
-          docker run --rm --platform linux/amd64 $IMAGE_NAME:${{ github.sha }} test -x /app/bin/server && echo "✅ Server binary exists and is executable" || (echo "❌ Server binary missing or not executable" && exit 1)
-          echo "🔍 Verifying image architecture..."
-          docker inspect --format='{{.Architecture}}' $IMAGE_NAME:${{ github.sha }}
-
-      - name: Push Docker Image
-        run: |
-          VERSION="${{ needs.validate-version.outputs.version }}"
-          echo "📤 Pushing Docker images..."
-          docker push $IMAGE_NAME:${{ github.sha }}
-          docker push $IMAGE_NAME:$VERSION
-          docker push $IMAGE_NAME:latest
-          echo "✅ Docker images pushed with tags: ${{ github.sha }}, $VERSION, latest"
-
-      - name: Deploy to Cloud Run
-        uses: google-github-actions/deploy-cloudrun@v2
-        with:
-          service: ${{ env.SERVICE_NAME }}
-          image: ${{ env.IMAGE_NAME }}:${{ github.sha }}
-          region: ${{ env.REGION }}
-          flags: '--no-traffic'
-
-      - name: Migrate Traffic to New Revision
-        run: |
-          echo "🔄 Migrating 100% traffic to new revision..."
-          gcloud run services update-traffic ${{ env.SERVICE_NAME }} \
-            --region=${{ env.REGION }} \
-            --to-latest
+          echo "🚀 Deploying to Cloud Run from source..."
+          gcloud run deploy ${{ env.SERVICE_NAME }} \
+            --source . \
+            --region ${{ env.REGION }} \
+            --platform managed \
+            --allow-unauthenticated \
+            --set-env-vars="FIREBASE_CONFIG_PATH=/app/serviceAccountKey.json" \
+            --tag "v${VERSION//\./-}"
 
       - name: Show deployment URL
         run: |
