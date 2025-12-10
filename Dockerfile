@@ -35,8 +35,8 @@ FROM --platform=linux/amd64 eclipse-temurin:17-jre-jammy
 
 WORKDIR /app
 
-# Copy just the fat jar
-COPY --from=builder /build/server/build/libs/*-all.jar /app/server.jar
+# Copy the fat jar (use exact filename, not wildcard)
+COPY --from=builder /build/server/build/libs/server-all.jar /app/server.jar
 
 # Copy service account key
 COPY server/src/main/resources/serviceAccountKey.json /app/serviceAccountKey.json
@@ -52,5 +52,6 @@ ENV FIREBASE_CONFIG_PATH=/app/serviceAccountKey.json
 
 EXPOSE 8080
 
-# Run the fat jar directly - no shell script needed
-CMD ["java", "-XX:+UseContainerSupport", "-XX:MaxRAMPercentage=75.0", "-jar", "/app/server.jar"]
+# Run the fat jar directly
+ENTRYPOINT ["java"]
+CMD ["-XX:+UseContainerSupport", "-XX:MaxRAMPercentage=75.0", "-jar", "/app/server.jar"]

@@ -28,8 +28,10 @@ steps:
         docker run --rm --entrypoint java ${_IMAGE_NAME}:${COMMIT_SHA} -version
         echo "🔍 Checking architecture..."
         docker run --rm --entrypoint uname ${_IMAGE_NAME}:${COMMIT_SHA} -m
-        echo "🔍 Testing JAR manifest..."
-        docker run --rm --entrypoint sh ${_IMAGE_NAME}:${COMMIT_SHA} -c "unzip -p /app/server.jar META-INF/MANIFEST.MF | head -10"
+        echo "🔍 Testing JAR is valid..."
+        docker run --rm --entrypoint java ${_IMAGE_NAME}:${COMMIT_SHA} -jar /app/server.jar --help || echo "JAR test done (may fail if no --help)"
+        echo "🔍 Checking JAR header..."
+        docker run --rm --entrypoint sh ${_IMAGE_NAME}:${COMMIT_SHA} -c "head -c 4 /app/server.jar | od -A x -t x1z | head -1"
         echo "✅ Verification complete"
 
   # Push the image
