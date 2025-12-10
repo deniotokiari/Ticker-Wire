@@ -207,16 +207,6 @@ jobs:
             -t $IMAGE_NAME:latest \
             .
 
-      - name: Verify Docker image contents
-        run: |
-          echo "=== Checking /app contents in Docker image ==="
-          docker run --rm $IMAGE_NAME:${{ github.sha }} ls -la /app/
-          echo "=== Checking /app/lib contents (JARs) ==="
-          docker run --rm $IMAGE_NAME:${{ github.sha }} ls -la /app/lib/ | head -20
-          echo "=== Check Java version ==="
-          docker run --rm $IMAGE_NAME:${{ github.sha }} java -version
-          echo "✅ Docker image verified successfully"
-
       - name: Push Docker Image
         run: |
           VERSION="${{ needs.validate-version.outputs.version }}"
