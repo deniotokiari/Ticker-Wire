@@ -82,6 +82,15 @@ jobs:
       - name: Build Server Distribution
         run: ./gradlew :server:installDist --no-daemon --info
 
+      - name: Verify build output
+        run: |
+          echo "=== Build output structure ==="
+          ls -laR server/build/install/server/
+          echo "=== Server binary exists? ==="
+          test -f server/build/install/server/bin/server && echo "✅ YES" || (echo "❌ NO" && exit 1)
+          echo "=== Server binary contents (first 10 lines) ==="
+          head -10 server/build/install/server/bin/server
+
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -182,7 +191,7 @@ jobs:
           fi
           echo "✅ $FILE exists and is valid JSON"
 
-      - name: Build and Push Docker Image
+      - name: Build Docker Image
         run: |
           VERSION="${{ needs.validate-version.outputs.version }}"
           echo "🔨 Building Docker image with pre-built artifacts..."
@@ -191,6 +200,19 @@ jobs:
             -t $IMAGE_NAME:$VERSION \
             -t $IMAGE_NAME:latest \
             .
+
+      - name: Verify Docker image contents
+        run: |
+          echo "=== Checking /app contents in Docker image ==="
+          docker run --rm $IMAGE_NAME:${{ github.sha }} ls -la /app/
+          echo "=== Checking /app/bin contents ==="
+          docker run --rm $IMAGE_NAME:${{ github.sha }} ls -la /app/bin/
+          echo "=== Verifying server binary exists ==="
+          docker run --rm $IMAGE_NAME:${{ github.sha }} test -f /app/bin/server && echo "✅ /app/bin/server exists" || (echo "❌ /app/bin/server NOT FOUND" && exit 1)
+
+      - name: Push Docker Image
+        run: |
+          VERSION="${{ needs.validate-version.outputs.version }}"
           echo "📤 Pushing Docker images..."
           docker push $IMAGE_NAME:${{ github.sha }}
           docker push $IMAGE_NAME:$VERSION
