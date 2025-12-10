@@ -30,8 +30,8 @@ fun main() {
 }
 
 fun Application.module() {
-    val credentialsPath = System.getenv("FIREBASE_CREDENTIALS_PATH")
-        ?: System.getProperty("firebase.credentials.path")
+    val credentialsPath = System.getenv("FIREBASE_CONFIG_PATH")
+        ?: System.getProperty("firebase.config.path")
 
     FirebaseConfig.initialize(credentialsPath)
 

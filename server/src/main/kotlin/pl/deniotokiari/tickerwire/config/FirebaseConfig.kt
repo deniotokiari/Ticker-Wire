@@ -39,7 +39,7 @@ object FirebaseConfig {
                             throw IllegalStateException(
                                 "Firebase credentials not found. " +
                                         "Place serviceAccountKey.json in project root, " +
-                                        "set FIREBASE_CREDENTIALS_PATH environment variable, " +
+                                        "set FIREBASE_CONFIG_PATH environment variable, " +
                                         "or set GOOGLE_APPLICATION_CREDENTIALS environment variable",
                                 e
                             )

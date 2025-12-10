@@ -27,7 +27,7 @@ RUN ./gradlew :server:installDist --no-daemon --info
 # Stage 2: Runtime
 FROM eclipse-temurin:17-jre-jammy AS runtime
 
-# Create non-root user and group (Ubuntu syntax)
+# Create non-root user and group
 RUN groupadd -r appgroup && useradd -r -g appgroup appuser
 
 # Create app directory and assign ownership
@@ -38,15 +38,19 @@ WORKDIR /app
 # Copy built distribution
 COPY --from=build /app/server/build/install/server /app
 
-# Ensure server script is executable
+# Copy Firebase credentials (injected at build time)
+COPY server/src/main/resources/serviceAccountKey.json /app/serviceAccountKey.json
+
+# Ensure server script is executable and set ownership
 RUN chmod +x /app/bin/server && chown -R appuser:appgroup /app
 
 USER appuser
 
+# Set environment variables
 ENV PORT=8080
+ENV FIREBASE_CONFIG_PATH=/app/serviceAccountKey.json
+
 EXPOSE 8080
 
 CMD ["/app/bin/server"]
-
-
 
