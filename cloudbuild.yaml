@@ -20,19 +20,19 @@ steps:
             .
         fi
 
-  # Verify the image contents
+  # Verify the image contents (use --entrypoint to override and not start server)
   - name: 'gcr.io/cloud-builders/docker'
     entrypoint: 'sh'
     args:
       - '-c'
       - |
         echo "🔍 Verifying Docker image contents..."
-        docker run --rm ${_IMAGE_NAME}:${COMMIT_SHA} ls -la /app/
-        docker run --rm ${_IMAGE_NAME}:${COMMIT_SHA} ls -la /app/lib/ | head -20
+        docker run --rm --entrypoint ls ${_IMAGE_NAME}:${COMMIT_SHA} -la /app/
+        docker run --rm --entrypoint ls ${_IMAGE_NAME}:${COMMIT_SHA} -la /app/lib/ | head -20
         echo "🔍 Testing Java execution..."
-        docker run --rm ${_IMAGE_NAME}:${COMMIT_SHA} java -version
-        echo "🔍 Testing classpath..."
-        docker run --rm ${_IMAGE_NAME}:${COMMIT_SHA} ls /app/lib/server*.jar || echo "Server JAR check"
+        docker run --rm --entrypoint java ${_IMAGE_NAME}:${COMMIT_SHA} -version
+        echo "🔍 Checking server JAR exists..."
+        docker run --rm --entrypoint ls ${_IMAGE_NAME}:${COMMIT_SHA} /app/lib/server*.jar
         echo "✅ Verification complete"
 
   # Push the image
