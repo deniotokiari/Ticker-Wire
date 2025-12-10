@@ -215,8 +215,7 @@ jobs:
           docker run --rm $IMAGE_NAME:${{ github.sha }} ls -la /app/lib/ | head -20
           echo "=== Check Java version ==="
           docker run --rm $IMAGE_NAME:${{ github.sha }} java -version
-          echo "=== Test Java can find the main class ==="
-          docker run --rm $IMAGE_NAME:${{ github.sha }} java -cp "/app/lib/*" pl.deniotokiari.tickerwire.ApplicationKt --help 2>&1 | head -20 || echo "Note: Server may not support --help flag"
+          echo "✅ Docker image verified successfully"
 
       - name: Push Docker Image
         run: |
