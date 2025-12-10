@@ -125,8 +125,8 @@ jobs:
       - name: Build Docker Image
         run: |
           VERSION="${{ needs.validate-version.outputs.version }}"
-          echo "🔨 Building Docker image (multi-stage build, no cache)..."
-          docker build --no-cache --progress=plain \
+          echo "🔨 Building Docker image (multi-stage build, linux/amd64)..."
+          docker build --no-cache --progress=plain --platform linux/amd64 \
             -t $IMAGE_NAME:${{ github.sha }} \
             -t $IMAGE_NAME:$VERSION \
             -t $IMAGE_NAME:latest \
@@ -135,9 +135,11 @@ jobs:
       - name: Verify Docker Image
         run: |
           echo "🔍 Verifying Docker image contents..."
-          docker run --rm $IMAGE_NAME:${{ github.sha }} ls -la /app/
-          docker run --rm $IMAGE_NAME:${{ github.sha }} ls -la /app/bin/
-          docker run --rm $IMAGE_NAME:${{ github.sha }} test -x /app/bin/server && echo "✅ Server binary exists and is executable" || (echo "❌ Server binary missing or not executable" && exit 1)
+          docker run --rm --platform linux/amd64 $IMAGE_NAME:${{ github.sha }} ls -la /app/
+          docker run --rm --platform linux/amd64 $IMAGE_NAME:${{ github.sha }} ls -la /app/bin/
+          docker run --rm --platform linux/amd64 $IMAGE_NAME:${{ github.sha }} test -x /app/bin/server && echo "✅ Server binary exists and is executable" || (echo "❌ Server binary missing or not executable" && exit 1)
+          echo "🔍 Verifying image architecture..."
+          docker inspect --format='{{.Architecture}}' $IMAGE_NAME:${{ github.sha }}
 
       - name: Push Docker Image
         run: |

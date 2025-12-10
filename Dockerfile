@@ -2,7 +2,7 @@
 # Multi-stage build for reliability
 
 # Stage 1: Build
-FROM eclipse-temurin:17-jdk-jammy AS builder
+FROM --platform=linux/amd64 eclipse-temurin:17-jdk-jammy AS builder
 
 # Install Android SDK command-line tools (required for shared module)
 ENV ANDROID_HOME=/opt/android-sdk
@@ -39,7 +39,7 @@ COPY server/ server/
 RUN chmod +x gradlew && ./gradlew :server:installDist --no-daemon
 
 # Stage 2: Runtime (slim image without Android SDK)
-FROM eclipse-temurin:17-jre-jammy
+FROM --platform=linux/amd64 eclipse-temurin:17-jre-jammy
 
 # Create non-root user for security
 RUN groupadd -r appgroup && useradd -r -g appgroup appuser
