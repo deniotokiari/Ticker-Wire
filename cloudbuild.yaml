@@ -22,7 +22,12 @@ steps:
         docker run --rm ${_IMAGE_NAME}:${COMMIT_SHA} ls -la /app/lib/ | head -20
         docker run --rm ${_IMAGE_NAME}:${COMMIT_SHA} test -f /app/bin/server && echo "✅ Server binary exists" || (echo "❌ Server binary NOT FOUND" && exit 1)
         docker run --rm ${_IMAGE_NAME}:${COMMIT_SHA} test -f /app/serviceAccountKey.json && echo "✅ Firebase credentials file exists" || echo "⚠️ No credentials file (will use ADC on Cloud Run)"
+        echo "📄 First 5 lines of server script:"
         docker run --rm ${_IMAGE_NAME}:${COMMIT_SHA} head -5 /app/bin/server
+        echo "🔍 Checking for Windows line endings (should show no \\r):"
+        docker run --rm ${_IMAGE_NAME}:${COMMIT_SHA} head -1 /app/bin/server | od -c | head -1
+        echo "🔍 Trying to execute server --help:"
+        docker run --rm ${_IMAGE_NAME}:${COMMIT_SHA} /bin/sh -c "test -x /app/bin/server && echo 'Script is executable'" || echo "Script not executable"
         echo "✅ Verification complete"
 
   # Push the image

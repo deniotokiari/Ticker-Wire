@@ -25,13 +25,20 @@ COPY build.gradle.kts settings.gradle.kts gradle.properties ./
 COPY shared/ shared/
 COPY server/ server/
 
-# Build and verify output exists
-RUN chmod +x gradlew \
+# Install dos2unix for line ending fixes
+RUN apt-get update && apt-get install -y --no-install-recommends dos2unix \
+    && rm -rf /var/lib/apt/lists/*
+
+# Fix gradlew line endings and build
+RUN dos2unix gradlew \
+    && chmod +x gradlew \
     && ./gradlew :server:installDist --no-daemon \
     && echo "=== Build complete, verifying output ===" \
     && ls -la /build/server/build/install/server/ \
     && ls -la /build/server/build/install/server/bin/ \
     && test -f /build/server/build/install/server/bin/server \
+    && dos2unix /build/server/build/install/server/bin/server \
+    && echo "Shebang line:" && head -1 /build/server/build/install/server/bin/server | od -c | head -1 \
     && echo "✅ Server binary created successfully"
 
 # Runtime stage
@@ -48,10 +55,13 @@ COPY --from=builder /build/server/build/install/server/ /app/
 # Copy service account key if it exists (optional - Cloud Run can use ADC)
 COPY server/src/main/resources/serviceAccountKey.jso[n] /app/
 
-# Verify and set permissions
-RUN ls -la /app/ \
+# Fix line endings (Windows CRLF -> Unix LF) and set permissions
+RUN apt-get update && apt-get install -y --no-install-recommends dos2unix \
+    && rm -rf /var/lib/apt/lists/* \
+    && ls -la /app/ \
     && ls -la /app/bin/ \
     && test -f /app/bin/server || (echo "❌ /app/bin/server not found" && exit 1) \
+    && dos2unix /app/bin/server \
     && chmod +x /app/bin/server \
     && chown -R app:app /app \
     && echo "✅ Runtime image ready"
