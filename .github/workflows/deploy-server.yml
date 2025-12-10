@@ -195,7 +195,13 @@ jobs:
         run: |
           VERSION="${{ needs.validate-version.outputs.version }}"
           echo "🔨 Building Docker image with pre-built artifacts..."
+          echo "=== Docker build context ==="
+          ls -la
+          ls -la docker-dist/ || echo "docker-dist/ not found!"
+          ls -la docker-dist/bin/ || echo "docker-dist/bin/ not found!"
+          echo "=== Building ==="
           docker build \
+            --platform linux/amd64 \
             -t $IMAGE_NAME:${{ github.sha }} \
             -t $IMAGE_NAME:$VERSION \
             -t $IMAGE_NAME:latest \
@@ -217,6 +223,8 @@ jobs:
           docker push $IMAGE_NAME:${{ github.sha }}
           docker push $IMAGE_NAME:$VERSION
           docker push $IMAGE_NAME:latest
+          echo "=== Image digest ==="
+          docker inspect --format='{{index .RepoDigests 0}}' $IMAGE_NAME:${{ github.sha }} || echo "Could not get digest"
           echo "✅ Docker image pushed with tags: ${{ github.sha }}, $VERSION, latest"
 
       - name: Deploy to Cloud Run
