@@ -172,7 +172,7 @@ jobs:
 
       - name: Verify credentials file before Docker build
         run: |
-          FILE="server/src/main/resources/serviceAccountKey.json"
+          FILE="server-dist/service-account.json"
           if [ ! -f "$FILE" ]; then
             echo "❌ $FILE does not exist!"
             exit 1
