@@ -131,20 +131,13 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: server-distribution
-          path: server/build/install/server/
+          path: docker-dist/
 
       - name: Verify build artifacts
         run: |
-          echo "=== Workspace structure ==="
-          pwd
-          ls -la
-          echo "=== Server directory ==="
-          ls -la server/ || echo "server/ not found"
-          echo "=== Build directory ==="
-          ls -laR server/build/ || echo "server/build/ not found"
-          echo "=== Checking for server binary ==="
-          find . -name "server" -type f 2>/dev/null || echo "No server binary found"
-          test -f server/build/install/server/bin/server || (echo "❌ server binary not found in artifacts!" && exit 1)
+          echo "=== Downloaded artifacts ==="
+          ls -laR docker-dist/
+          test -f docker-dist/bin/server || (echo "❌ server binary not found in artifacts!" && exit 1)
           echo "✅ Build artifacts downloaded successfully"
 
       - name: Create serviceAccountKey.json for Docker build

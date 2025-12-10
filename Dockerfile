@@ -11,8 +11,8 @@ RUN mkdir -p /app && chown -R appuser:appgroup /app
 
 WORKDIR /app
 
-# Copy pre-built server distribution (built in CI)
-COPY server/build/install/server/ /app/
+# Copy pre-built server distribution (downloaded from CI artifacts to docker-dist/)
+COPY docker-dist/ /app/
 
 # Copy Firebase credentials (injected at build time in CI)
 COPY server/src/main/resources/serviceAccountKey.json /app/serviceAccountKey.json
