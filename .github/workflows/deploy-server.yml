@@ -77,7 +77,7 @@ jobs:
           SERVICE_ACCOUNT_KEY: ${{ secrets.SERVICE_ACCOUNT_KEY_JSON }}
         run: |
           mkdir -p server/src/main/resources
-          echo "$SERVICE_ACCOUNT_KEY" > server/src/main/resources/serviceAccountKey.json
+          printf '%s' "$SERVICE_ACCOUNT_KEY" > server/src/main/resources/serviceAccountKey.json
 
       - name: Build Server Distribution
         run: ./gradlew :server:installDist --no-daemon --info
@@ -111,7 +111,7 @@ jobs:
           SERVICE_ACCOUNT_KEY: ${{ secrets.SERVICE_ACCOUNT_KEY_JSON }}
         run: |
           mkdir -p server/src/main/resources
-          echo "$SERVICE_ACCOUNT_KEY" > server/src/main/resources/serviceAccountKey.json
+          printf '%s' "$SERVICE_ACCOUNT_KEY" > server/src/main/resources/serviceAccountKey.json
 
       - name: Run Server Tests
         run: ./gradlew :server:test --no-daemon --info
@@ -132,7 +132,15 @@ jobs:
           SERVICE_ACCOUNT_KEY: ${{ secrets.SERVICE_ACCOUNT_KEY_JSON }}
         run: |
           mkdir -p server/src/main/resources
-          echo "$SERVICE_ACCOUNT_KEY" > server/src/main/resources/serviceAccountKey.json
+          printf '%s' "$SERVICE_ACCOUNT_KEY" > server/src/main/resources/serviceAccountKey.json
+          
+          # Verify the file was created and has content
+          if [ ! -s server/src/main/resources/serviceAccountKey.json ]; then
+            echo "❌ serviceAccountKey.json is empty or not created!"
+            echo "Make sure SERVICE_ACCOUNT_KEY_JSON secret is set"
+            exit 1
+          fi
+          echo "✅ serviceAccountKey.json created ($(wc -c < server/src/main/resources/serviceAccountKey.json) bytes)"
 
       - name: Google Auth
         uses: google-github-actions/auth@v2
@@ -146,6 +154,20 @@ jobs:
 
       - name: Configure Docker for Artifact Registry
         run: gcloud auth configure-docker europe-west1-docker.pkg.dev --quiet
+
+      - name: Verify credentials file before Docker build
+        run: |
+          FILE="server/src/main/resources/serviceAccountKey.json"
+          if [ ! -f "$FILE" ]; then
+            echo "❌ $FILE does not exist!"
+            exit 1
+          fi
+          # Check if it's valid JSON
+          if ! python3 -c "import json; json.load(open('$FILE'))"; then
+            echo "❌ $FILE is not valid JSON!"
+            exit 1
+          fi
+          echo "✅ $FILE exists and is valid JSON"
 
       - name: Build and Push Docker Image
         run: |

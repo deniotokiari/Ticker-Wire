@@ -21,8 +21,13 @@ COPY gradle/libs.versions.toml gradle/
 COPY shared shared
 COPY server server
 
-# Build the server distribution
-RUN ./gradlew :server:installDist --no-daemon --info
+# Build only the JVM target of shared module and then the server
+# This avoids needing Android SDK which isn't in this Docker image
+RUN ./gradlew :shared:jvmJar :server:installDist --no-daemon \
+    && echo "=== Build completed ===" \
+    && ls -la /app/server/build/install/server/ \
+    && ls -la /app/server/build/install/server/bin/ \
+    && test -f /app/server/build/install/server/bin/server || (echo "ERROR: server script not found!" && exit 1)
 
 # Stage 2: Runtime
 FROM eclipse-temurin:17-jre-jammy AS runtime
@@ -36,13 +41,17 @@ RUN mkdir -p /app && chown -R appuser:appgroup /app
 WORKDIR /app
 
 # Copy built distribution
-COPY --from=build /app/server/build/install/server /app
+COPY --from=build /app/server/build/install/server/ /app/
 
 # Copy Firebase credentials (injected at build time)
 COPY server/src/main/resources/serviceAccountKey.json /app/serviceAccountKey.json
 
-# Ensure server script is executable and set ownership
-RUN chmod +x /app/bin/server && chown -R appuser:appgroup /app
+# Verify files were copied and set permissions
+RUN ls -la /app/ && \
+    ls -la /app/bin/ && \
+    test -f /app/bin/server || (echo "ERROR: /app/bin/server not found after copy!" && exit 1) && \
+    chmod +x /app/bin/server && \
+    chown -R appuser:appgroup /app
 
 USER appuser
 
@@ -53,4 +62,3 @@ ENV FIREBASE_CONFIG_PATH=/app/serviceAccountKey.json
 EXPOSE 8080
 
 CMD ["/app/bin/server"]
-
