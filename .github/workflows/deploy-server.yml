@@ -213,8 +213,17 @@ jobs:
           docker run --rm $IMAGE_NAME:${{ github.sha }} ls -la /app/
           echo "=== Checking /app/bin contents ==="
           docker run --rm $IMAGE_NAME:${{ github.sha }} ls -la /app/bin/
-          echo "=== Verifying server binary exists ==="
-          docker run --rm $IMAGE_NAME:${{ github.sha }} test -f /app/bin/server && echo "✅ /app/bin/server exists" || (echo "❌ /app/bin/server NOT FOUND" && exit 1)
+          echo "=== Server script shebang line ==="
+          docker run --rm $IMAGE_NAME:${{ github.sha }} head -1 /app/bin/server
+          echo "=== Check for DOS line endings (CRLF) ==="
+          docker run --rm $IMAGE_NAME:${{ github.sha }} cat -A /app/bin/server | head -5
+          echo "=== Check if bash exists ==="
+          docker run --rm $IMAGE_NAME:${{ github.sha }} ls -la /bin/bash || echo "/bin/bash not found!"
+          docker run --rm $IMAGE_NAME:${{ github.sha }} ls -la /bin/sh || echo "/bin/sh not found!"
+          echo "=== File type ==="
+          docker run --rm $IMAGE_NAME:${{ github.sha }} file /app/bin/server || echo "file command not available"
+          echo "=== Try running the server script ==="
+          docker run --rm --entrypoint /bin/sh $IMAGE_NAME:${{ github.sha }} -c "/app/bin/server --help" 2>&1 || echo "Server script execution failed"
 
       - name: Push Docker Image
         run: |

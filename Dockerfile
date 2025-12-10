@@ -3,6 +3,12 @@
 
 FROM eclipse-temurin:17-jre-jammy
 
+# Install required packages (bash for Gradle script, file for debugging)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    bash \
+    file \
+    && rm -rf /var/lib/apt/lists/*
+
 # Create non-root user and group
 RUN groupadd -r appgroup && useradd -r -g appgroup appuser
 
