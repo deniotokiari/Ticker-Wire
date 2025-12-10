@@ -1,26 +1,16 @@
 steps:
   # Build the Docker image
   - name: 'gcr.io/cloud-builders/docker'
-    entrypoint: 'bash'
     args:
-      - '-c'
-      - |
-        # Read service account key if it exists
-        if [ -f "server/src/main/resources/serviceAccountKey.json" ]; then
-          SERVICE_KEY=$(cat server/src/main/resources/serviceAccountKey.json | base64 -w 0)
-          docker build --no-cache \
-            --build-arg SERVICE_ACCOUNT_KEY_CONTENT="$(cat server/src/main/resources/serviceAccountKey.json)" \
-            -t ${_IMAGE_NAME}:${COMMIT_SHA} \
-            -t ${_IMAGE_NAME}:latest \
-            .
-        else
-          docker build --no-cache \
-            -t ${_IMAGE_NAME}:${COMMIT_SHA} \
-            -t ${_IMAGE_NAME}:latest \
-            .
-        fi
+      - 'build'
+      - '--no-cache'
+      - '-t'
+      - '${_IMAGE_NAME}:${COMMIT_SHA}'
+      - '-t'
+      - '${_IMAGE_NAME}:latest'
+      - '.'
 
-  # Verify the image contents (use --entrypoint to override and not start server)
+  # Verify the image contents (override entrypoint to not start server)
   - name: 'gcr.io/cloud-builders/docker'
     entrypoint: 'sh'
     args:
@@ -28,11 +18,14 @@ steps:
       - |
         echo "🔍 Verifying Docker image contents..."
         docker run --rm --entrypoint ls ${_IMAGE_NAME}:${COMMIT_SHA} -la /app/
-        docker run --rm --entrypoint ls ${_IMAGE_NAME}:${COMMIT_SHA} -la /app/lib/ | head -20
-        echo "🔍 Testing Java execution..."
+        echo "🔍 Listing lib folder..."
+        docker run --rm --entrypoint sh ${_IMAGE_NAME}:${COMMIT_SHA} -c "ls -la /app/lib/ | head -20"
+        echo "🔍 Checking for server JAR..."
+        docker run --rm --entrypoint sh ${_IMAGE_NAME}:${COMMIT_SHA} -c "ls /app/lib/ | grep -i server || echo 'No server jar found'"
+        echo "🔍 Credentials file..."
+        docker run --rm --entrypoint sh ${_IMAGE_NAME}:${COMMIT_SHA} -c "test -f /app/serviceAccountKey.json && echo 'OK' || echo 'MISSING'"
+        echo "🔍 Testing Java..."
         docker run --rm --entrypoint java ${_IMAGE_NAME}:${COMMIT_SHA} -version
-        echo "🔍 Checking server JAR exists..."
-        docker run --rm --entrypoint ls ${_IMAGE_NAME}:${COMMIT_SHA} /app/lib/server*.jar
         echo "✅ Verification complete"
 
   # Push the image

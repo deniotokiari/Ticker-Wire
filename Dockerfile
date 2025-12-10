@@ -29,30 +29,29 @@ COPY server/ server/
 RUN chmod +x gradlew \
     && ./gradlew :server:installDist --no-daemon \
     && echo "=== Build complete ===" \
-    && ls -la /build/server/build/install/server/ \
-    && ls -la /build/server/build/install/server/lib/ | head -10
+    && echo "=== Full install directory ===" \
+    && ls -laR /build/server/build/install/server/ \
+    && echo "=== Looking for server JAR ===" \
+    && ls /build/server/build/install/server/lib/ | grep -i server
 
 # Runtime stage
 FROM eclipse-temurin:17-jre-jammy
 
 WORKDIR /app
 
-# Copy only the lib folder (JAR files)
+# Copy JARs from builder
 COPY --from=builder /build/server/build/install/server/lib/ /app/lib/
 
-# Copy service account key if provided
-ARG SERVICE_ACCOUNT_KEY_CONTENT
-RUN if [ -n "$SERVICE_ACCOUNT_KEY_CONTENT" ]; then \
-        echo "$SERVICE_ACCOUNT_KEY_CONTENT" > /app/serviceAccountKey.json; \
-    fi
+# Copy service account key directly (created by CI before docker build)
+COPY server/src/main/resources/serviceAccountKey.json /app/serviceAccountKey.json
 
 # Verify
-RUN ls -la /app/ && ls -la /app/lib/ | head -10
+RUN ls -la /app/ && ls -la /app/lib/ | head -10 && test -f /app/serviceAccountKey.json && echo "✅ All files present"
 
 ENV PORT=8080
 ENV FIREBASE_CONFIG_PATH=/app/serviceAccountKey.json
 
 EXPOSE 8080
 
-# Run Java directly instead of using the shell script
+# Run Java directly
 ENTRYPOINT ["java", "-XX:+UseContainerSupport", "-XX:MaxRAMPercentage=75.0", "-cp", "/app/lib/*", "pl.deniotokiari.tickerwire.ApplicationKt"]
