@@ -1,8 +1,10 @@
 steps:
-  # Build the Docker image
+  # Build the Docker image (explicitly for linux/amd64)
   - name: 'gcr.io/cloud-builders/docker'
     args:
       - 'build'
+      - '--platform'
+      - 'linux/amd64'
       - '--no-cache'
       - '-t'
       - '${_IMAGE_NAME}:${COMMIT_SHA}'
@@ -10,7 +12,7 @@ steps:
       - '${_IMAGE_NAME}:latest'
       - '.'
 
-  # Verify the image contents (override entrypoint to not start server)
+  # Verify the image contents
   - name: 'gcr.io/cloud-builders/docker'
     entrypoint: 'sh'
     args:
@@ -18,14 +20,16 @@ steps:
       - |
         echo "🔍 Verifying Docker image contents..."
         docker run --rm --entrypoint ls ${_IMAGE_NAME}:${COMMIT_SHA} -la /app/
-        echo "🔍 Listing lib folder..."
-        docker run --rm --entrypoint sh ${_IMAGE_NAME}:${COMMIT_SHA} -c "ls -la /app/lib/ | head -20"
-        echo "🔍 Checking for server JAR..."
-        docker run --rm --entrypoint sh ${_IMAGE_NAME}:${COMMIT_SHA} -c "ls /app/lib/ | grep -i server || echo 'No server jar found'"
-        echo "🔍 Credentials file..."
+        echo "🔍 Checking server.jar..."
+        docker run --rm --entrypoint sh ${_IMAGE_NAME}:${COMMIT_SHA} -c "ls -la /app/server.jar"
+        echo "🔍 Checking credentials..."
         docker run --rm --entrypoint sh ${_IMAGE_NAME}:${COMMIT_SHA} -c "test -f /app/serviceAccountKey.json && echo 'OK' || echo 'MISSING'"
         echo "🔍 Testing Java..."
         docker run --rm --entrypoint java ${_IMAGE_NAME}:${COMMIT_SHA} -version
+        echo "🔍 Checking architecture..."
+        docker run --rm --entrypoint uname ${_IMAGE_NAME}:${COMMIT_SHA} -m
+        echo "🔍 Testing JAR manifest..."
+        docker run --rm --entrypoint sh ${_IMAGE_NAME}:${COMMIT_SHA} -c "unzip -p /app/server.jar META-INF/MANIFEST.MF | head -10"
         echo "✅ Verification complete"
 
   # Push the image
@@ -58,10 +62,6 @@ substitutions:
   _SERVICE_NAME: ticker-wire-server
   _REGION: europe-west1
   _IMAGE_NAME: europe-west1-docker.pkg.dev/ticker-wire/cloud-run-source-deploy/ticker-wire-server
-
-images:
-  - '${_IMAGE_NAME}:${COMMIT_SHA}'
-  - '${_IMAGE_NAME}:latest'
 
 options:
   logging: CLOUD_LOGGING_ONLY

@@ -1,6 +1,6 @@
 # Dockerfile for TickerWire Server
 
-FROM eclipse-temurin:17-jdk-jammy AS builder
+FROM --platform=linux/amd64 eclipse-temurin:17-jdk-jammy AS builder
 
 # Install Android SDK (required for shared module)
 ENV ANDROID_HOME=/opt/android-sdk
@@ -24,37 +24,30 @@ COPY build.gradle.kts settings.gradle.kts gradle.properties ./
 COPY shared/ shared/
 COPY server/ server/
 
-# Build
+# Build FAT JAR instead of distribution
 RUN dos2unix gradlew && chmod +x gradlew \
-    && ./gradlew :server:installDist --no-daemon \
-    && dos2unix /build/server/build/install/server/bin/server \
-    && chmod +x /build/server/build/install/server/bin/server
+    && ./gradlew :server:buildFatJar --no-daemon \
+    && echo "=== FAT JAR location ===" \
+    && find /build -name "*.jar" -path "*libs*" | head -5
 
-# Runtime - use simpler base
-FROM debian:bookworm-slim
-
-# Install JRE
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    openjdk-17-jre-headless \
-    && rm -rf /var/lib/apt/lists/*
+# Runtime
+FROM --platform=linux/amd64 eclipse-temurin:17-jre-jammy
 
 WORKDIR /app
 
-# Copy entire server distribution directory
-COPY --from=builder /build/server/build/install/server/ /app/
+# Copy just the fat jar
+COPY --from=builder /build/server/build/libs/*-all.jar /app/server.jar
 
 # Copy service account key
 COPY server/src/main/resources/serviceAccountKey.json /app/serviceAccountKey.json
 
-# Debug: show what was copied
-RUN echo "=== /app contents ===" && ls -laR /app/ && echo "=== End ===" \
-    && test -f /app/bin/server && echo "✅ server script exists" \
-    && chmod +x /app/bin/server
+# Verify
+RUN ls -la /app/ && test -f /app/server.jar && echo "✅ server.jar exists"
 
 ENV PORT=8080
 ENV FIREBASE_CONFIG_PATH=/app/serviceAccountKey.json
-ENV JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
 
 EXPOSE 8080
 
-CMD ["/app/bin/server"]
+# Run the fat jar directly - no shell script needed
+CMD ["java", "-XX:+UseContainerSupport", "-XX:MaxRAMPercentage=75.0", "-jar", "/app/server.jar"]
