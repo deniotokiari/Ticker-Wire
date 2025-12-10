@@ -10,7 +10,7 @@ steps:
       - '${_IMAGE_NAME}:latest'
       - '.'
 
-  # Verify the image contains the server binary
+  # Verify the image contents
   - name: 'gcr.io/cloud-builders/docker'
     entrypoint: 'sh'
     args:
@@ -19,7 +19,11 @@ steps:
         echo "🔍 Verifying Docker image contents..."
         docker run --rm ${_IMAGE_NAME}:${COMMIT_SHA} ls -la /app/
         docker run --rm ${_IMAGE_NAME}:${COMMIT_SHA} ls -la /app/bin/
+        docker run --rm ${_IMAGE_NAME}:${COMMIT_SHA} ls -la /app/lib/ | head -20
         docker run --rm ${_IMAGE_NAME}:${COMMIT_SHA} test -f /app/bin/server && echo "✅ Server binary exists" || (echo "❌ Server binary NOT FOUND" && exit 1)
+        docker run --rm ${_IMAGE_NAME}:${COMMIT_SHA} test -f /app/serviceAccountKey.json && echo "✅ Firebase credentials file exists" || echo "⚠️ No credentials file (will use ADC on Cloud Run)"
+        docker run --rm ${_IMAGE_NAME}:${COMMIT_SHA} head -5 /app/bin/server
+        echo "✅ Verification complete"
 
   # Push the image
   - name: 'gcr.io/cloud-builders/docker'
@@ -30,20 +34,22 @@ steps:
 
   # Deploy to Cloud Run
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
-    entrypoint: 'gcloud'
+    entrypoint: 'sh'
     args:
-      - 'run'
-      - 'deploy'
-      - '${_SERVICE_NAME}'
-      - '--image'
-      - '${_IMAGE_NAME}:${COMMIT_SHA}'
-      - '--region'
-      - '${_REGION}'
-      - '--platform'
-      - 'managed'
-      - '--allow-unauthenticated'
-      - '--set-env-vars'
-      - 'FIREBASE_CONFIG_PATH=/app/serviceAccountKey.json'
+      - '-c'
+      - |
+        gcloud run deploy ${_SERVICE_NAME} \
+          --image ${_IMAGE_NAME}:${COMMIT_SHA} \
+          --region ${_REGION} \
+          --platform managed \
+          --allow-unauthenticated \
+          --set-env-vars "FIREBASE_CONFIG_PATH=/app/serviceAccountKey.json,JAVA_TOOL_OPTIONS=-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0" \
+          --timeout 300 \
+          --cpu-boost \
+          --min-instances 0 \
+          --max-instances 10 \
+          --memory 512Mi \
+          --port 8080
 
 substitutions:
   _SERVICE_NAME: ticker-wire-server

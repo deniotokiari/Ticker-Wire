@@ -42,13 +42,16 @@ RUN groupadd -r app && useradd -r -g app app \
 
 WORKDIR /app
 
+# Copy server distribution
 COPY --from=builder /build/server/build/install/server/ /app/
-COPY server/src/main/resources/serviceAccountKey.json /app/serviceAccountKey.json
 
-# Verify copy worked and set permissions
+# Copy service account key if it exists (optional - Cloud Run can use ADC)
+COPY server/src/main/resources/serviceAccountKey.jso[n] /app/
+
+# Verify and set permissions
 RUN ls -la /app/ \
     && ls -la /app/bin/ \
-    && test -f /app/bin/server || (echo "❌ COPY FAILED: /app/bin/server not found" && exit 1) \
+    && test -f /app/bin/server || (echo "❌ /app/bin/server not found" && exit 1) \
     && chmod +x /app/bin/server \
     && chown -R app:app /app \
     && echo "✅ Runtime image ready"
