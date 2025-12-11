@@ -12,8 +12,9 @@ RUN mkdir -p /app && chown -R appuser:appgroup /app
 WORKDIR /app
 
 # Copy pre-built server distribution (built in CI)
-# Copy entire directory structure - this will fail if source doesn't exist
-COPY --chown=appuser:appgroup server/build/install/server/ /app/
+# First copy bin and lib directories explicitly to ensure they exist
+COPY --chown=appuser:appgroup server/build/install/server/bin /app/bin
+COPY --chown=appuser:appgroup server/build/install/server/lib /app/lib
 
 # Debug: Verify what was copied (this will help diagnose issues)
 RUN echo "=== Debugging: Contents of /app after COPY ===" && \

@@ -239,31 +239,89 @@ jobs:
           fi
           echo "✅ $FILE exists and is valid JSON"
 
-      - name: Verify files before Docker build
+      - name: Verify and fix artifact structure
         run: |
-          echo "=== Files that will be copied into Docker ==="
-          echo "Checking server/build/install/server/:"
-          if [ -d "server/build/install/server" ]; then
-            find server/build/install/server -type f | head -20
-            echo "Total files: $(find server/build/install/server -type f | wc -l)"
+          echo "=== Verifying artifact structure ==="
+          
+          # Check if files are in the expected location
+          if [ -d "server/build/install/server" ] && [ -f "server/build/install/server/bin/server" ]; then
+            echo "✅ Files are in the correct location: server/build/install/server/"
+            find server/build/install/server -type f | head -10
+          elif [ -d "server/build/install/bin" ] && [ -f "server/build/install/bin/server" ]; then
+            echo "⚠️  Files are in server/build/install/ directly, not in server/ subdirectory"
+            echo "Restructuring to match expected location..."
+            
+            # Create the server subdirectory and move files
+            mkdir -p server/build/install/server
+            if [ -d "server/build/install/bin" ]; then
+              mv server/build/install/bin server/build/install/server/
+            fi
+            if [ -d "server/build/install/lib" ]; then
+              mv server/build/install/lib server/build/install/server/
+            fi
+            # Move any other files/directories
+            find server/build/install -maxdepth 1 -mindepth 1 ! -name server -exec mv {} server/build/install/server/ \;
+            
+            echo "✅ Restructured to server/build/install/server/"
+            ls -la server/build/install/server/
           else
-            echo "❌ server/build/install/server/ does not exist!"
+            echo "❌ Cannot find server binary in expected locations!"
+            echo "Contents of server/build/install/:"
+            find server/build/install -type f -o -type d | head -30
             exit 1
           fi
+          
+          # Final verification
+          if [ ! -f "server/build/install/server/bin/server" ]; then
+            echo "❌ server/build/install/server/bin/server still not found after restructuring!"
+            exit 1
+          fi
+          echo "✅ Verified: server/build/install/server/bin/server exists"
           echo ""
           echo "Checking server/serviceAccountKey.json:"
           ls -lh server/serviceAccountKey.json || echo "⚠️  server/serviceAccountKey.json not found (will use Application Default Credentials)"
+
+      - name: Final verification before Docker build
+        run: |
+          echo "=== Final check: What Docker will see ==="
+          echo "Checking server/build/install/server/bin/server:"
+          if [ -f "server/build/install/server/bin/server" ]; then
+            echo "✅ Found: $(ls -lh server/build/install/server/bin/server)"
+            echo "File is executable: $([ -x server/build/install/server/bin/server ] && echo 'YES' || echo 'NO')"
+          else
+            echo "❌ NOT FOUND!"
+            echo "Current structure:"
+            find server/build/install -type f -name "server" 2>/dev/null || echo "No 'server' file found"
+            find server/build/install -type d -name "bin" 2>/dev/null || echo "No 'bin' directory found"
+            exit 1
+          fi
+          echo ""
+          echo "Directory tree that Docker COPY will use:"
+          tree -L 3 server/build/install/server/ 2>/dev/null || find server/build/install/server -type f | head -10
 
       - name: Build and Push Docker Image
         run: |
           VERSION="${{ needs.validate-version.outputs.version }}"
           echo "🔨 Building Docker image with pre-built artifacts..."
+          echo "Docker build context will include:"
+          echo "  - server/build/install/server/bin → /app/bin"
+          echo "  - server/build/install/server/lib → /app/lib"
+          echo "  - server/serviceAccountKey.json → /app/serviceAccountKey.json"
+          echo ""
+          echo "Verifying source files exist before Docker build:"
+          ls -lh server/build/install/server/bin/server || (echo "❌ Source file missing!" && exit 1)
+          ls -d server/build/install/server/lib || (echo "❌ Source lib directory missing!" && exit 1)
+          echo "✅ Source files verified"
+          echo ""
           docker build \
             --progress=plain \
+            --no-cache \
             -t $IMAGE_NAME:${{ github.sha }} \
             -t $IMAGE_NAME:$VERSION \
             -t $IMAGE_NAME:latest \
             .
+          # Note: --no-cache ensures fresh build for debugging
+          # Can be removed once deployment is working correctly
           echo "📤 Pushing Docker images..."
           docker push $IMAGE_NAME:${{ github.sha }}
           docker push $IMAGE_NAME:$VERSION
