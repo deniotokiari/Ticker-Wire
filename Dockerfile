@@ -99,24 +99,13 @@ USER appuser
 ENV PORT=8080
 ENV FIREBASE_CONFIG_PATH=/app/serviceAccountKey.json
 
-# Ensure bash is available (should already be in base image)
-RUN which bash || (echo "ERROR: bash not found!" && exit 1)
-
 EXPOSE 8080
 
 # Set APP_HOME environment variable (Gradle scripts often use this)
 ENV APP_HOME=/app
 WORKDIR /app
 
-# Create a simple start script that runs Java directly
-# This avoids issues with the Gradle-generated script
-RUN echo '#!/bin/bash' > /app/start.sh && \
-    echo 'set -e' >> /app/start.sh && \
-    echo 'cd /app' >> /app/start.sh && \
-    echo 'exec java -cp "/app/lib/*" pl.deniotokiari.tickerwire.ApplicationKt "$@"' >> /app/start.sh && \
-    chmod +x /app/start.sh && \
-    chown appuser:appgroup /app/start.sh && \
-    echo "✅ Created start.sh script"
-
-# Use the custom start script that runs Java directly
-CMD ["/app/start.sh"]
+# Run Java directly - most reliable approach for Cloud Run
+# No script needed, just execute Java with the classpath
+# Cloud Run's __cacert_entrypoint.sh will handle this CMD
+CMD ["java", "-cp", "/app/lib/*", "pl.deniotokiari.tickerwire.ApplicationKt"]
