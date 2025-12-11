@@ -13,6 +13,7 @@ env:
   PROJECT_ID: ticker-wire
   SERVICE_NAME: ticker-wire-server
   REGION: europe-west1
+  IMAGE: gcr.io/ticker-wire/ticker-wire-server
 
 jobs:
   # Job 1: Validate version tag doesn't exist
@@ -84,9 +85,9 @@ jobs:
       - name: Run Server Tests
         run: ./gradlew :server:test --no-daemon
 
-  # Job 3: Deploy to Cloud Run (builds from source)
+  # Job 3: Build and Deploy to Cloud Run
   deploy-server:
-    name: Deploy to Cloud Run
+    name: Build and Deploy to Cloud Run
     runs-on: ubuntu-latest
     needs: [validate-version, test-server]
     steps:
@@ -110,13 +111,38 @@ jobs:
         with:
           project_id: ${{ env.PROJECT_ID }}
 
-      - name: Submit Build to Cloud Build
+      - name: Configure Docker for GCR
+        run: gcloud auth configure-docker gcr.io --quiet
+
+      - name: Build Docker image
         run: |
-          echo "🚀 Submitting build to Cloud Build..."
-          gcloud builds submit \
-            --config=cloudbuild.yaml \
-            --substitutions=COMMIT_SHA=${{ github.sha }} \
-            .
+          docker build -t ${{ env.IMAGE }}:${{ github.sha }} -t ${{ env.IMAGE }}:latest .
+          echo "✅ Docker image built"
+
+      - name: Verify image locally
+        run: |
+          echo "🔍 Verifying image..."
+          docker run --rm --entrypoint ls ${{ env.IMAGE }}:${{ github.sha }} -la /app/
+          docker run --rm --entrypoint java ${{ env.IMAGE }}:${{ github.sha }} -version
+          echo "✅ Image verification complete"
+
+      - name: Push Docker image
+        run: |
+          docker push ${{ env.IMAGE }}:${{ github.sha }}
+          docker push ${{ env.IMAGE }}:latest
+          echo "✅ Docker image pushed to GCR"
+
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy ${{ env.SERVICE_NAME }} \
+            --image ${{ env.IMAGE }}:${{ github.sha }} \
+            --region ${{ env.REGION }} \
+            --platform managed \
+            --allow-unauthenticated \
+            --memory 512Mi \
+            --port 8080 \
+            --set-env-vars "FIREBASE_CONFIG_PATH=/app/serviceAccountKey.json" \
+            --quiet
 
       - name: Show deployment URL
         run: |

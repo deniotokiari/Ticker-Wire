@@ -52,6 +52,5 @@ ENV FIREBASE_CONFIG_PATH=/app/serviceAccountKey.json
 
 EXPOSE 8080
 
-# Run the fat jar directly
-ENTRYPOINT ["java"]
-CMD ["-XX:+UseContainerSupport", "-XX:MaxRAMPercentage=75.0", "-jar", "/app/server.jar"]
+# Run the server using explicit classpath (more reliable than -jar)
+CMD ["java", "-XX:+UseContainerSupport", "-XX:MaxRAMPercentage=75.0", "-cp", "/app/server.jar", "pl.deniotokiari.tickerwire.ApplicationKt"]
