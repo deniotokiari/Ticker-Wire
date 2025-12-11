@@ -12,9 +12,34 @@ RUN mkdir -p /app && chown -R appuser:appgroup /app
 WORKDIR /app
 
 # Copy pre-built server distribution (built in CI)
-# First copy bin and lib directories explicitly to ensure they exist
-COPY --chown=appuser:appgroup server/build/install/server/bin /app/bin
-COPY --chown=appuser:appgroup server/build/install/server/lib /app/lib
+# Copy the entire server directory structure, then move what we need
+COPY --chown=appuser:appgroup server/build/install/server/ /tmp/server-dist/
+RUN echo "=== Verifying COPY worked ===" && \
+    ls -la /tmp/server-dist/ && \
+    echo "" && \
+    echo "Checking /tmp/server-dist/bin:" && \
+    ls -la /tmp/server-dist/bin/ || (echo "ERROR: /tmp/server-dist/bin does not exist!" && exit 1) && \
+    echo "" && \
+    echo "Checking /tmp/server-dist/bin/server:" && \
+    test -f /tmp/server-dist/bin/server || (echo "ERROR: /tmp/server-dist/bin/server does not exist!" && exit 1) && \
+    echo "✅ Source files verified" && \
+    echo "" && \
+    mkdir -p /app/bin /app/lib && \
+    echo "Copying bin files..." && \
+    cp -v /tmp/server-dist/bin/* /app/bin/ && \
+    echo "Copying lib files..." && \
+    cp -v /tmp/server-dist/lib/* /app/lib/ && \
+    rm -rf /tmp/server-dist && \
+    echo "" && \
+    echo "=== Verifying copied files ===" && \
+    echo "Files in /app/bin:" && \
+    ls -la /app/bin/ && \
+    echo "" && \
+    echo "Files in /app/lib (first 5):" && \
+    ls -la /app/lib/ | head -5 && \
+    echo "" && \
+    test -f /app/bin/server || (echo "ERROR: /app/bin/server not found after copy!" && exit 1) && \
+    echo "✅ /app/bin/server exists"
 
 # Debug: Verify what was copied (this will help diagnose issues)
 RUN echo "=== Debugging: Contents of /app after COPY ===" && \
@@ -31,7 +56,12 @@ RUN echo "=== Debugging: Contents of /app after COPY ===" && \
     (ls -la /app/bin/ || echo "Cannot list /app/bin") && \
     echo "" && \
     echo "Contents of /app/lib (first 5 files, if exists):" && \
-    (ls -la /app/lib/ | head -5 || echo "Cannot list /app/lib")
+    (ls -la /app/lib/ | head -5 || echo "Cannot list /app/lib") && \
+    echo "" && \
+    echo "File count in /app/bin:" && \
+    (find /app/bin -type f | wc -l || echo "0") && \
+    echo "File count in /app/lib:" && \
+    (find /app/lib -type f | wc -l || echo "0")
 
 # Copy Firebase credentials
 # For local builds: use server/serviceAccountKey.json
