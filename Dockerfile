@@ -26,10 +26,15 @@ RUN echo "=== Verifying installation ===" && \
 USER appuser
 
 # Set environment variables
-ENV PORT=8080
+# Note: PORT is set by Cloud Run dynamically, don't override it
+# FIREBASE_CONFIG_PATH is optional - Cloud Run can use Application Default Credentials
 ENV FIREBASE_CONFIG_PATH=/app/serviceAccountKey.json
 
 EXPOSE 8080
 
-# Run the fat JAR
-CMD ["java", "-jar", "/app/server.jar"]
+# Run the fat JAR with optimized JVM settings for Cloud Run
+# -XX:+UseContainerSupport: Use container-aware memory settings
+# -XX:MaxRAMPercentage=75.0: Use 75% of available memory (Cloud Run sets memory limits)
+# -XX:+ExitOnOutOfMemoryError: Exit immediately on OOM (Cloud Run will restart)
+# -Djava.security.egd=file:/dev/./urandom: Faster startup (non-blocking entropy)
+CMD ["java", "-XX:+UseContainerSupport", "-XX:MaxRAMPercentage=75.0", "-XX:+ExitOnOutOfMemoryError", "-Djava.security.egd=file:/dev/./urandom", "-jar", "/app/server.jar"]

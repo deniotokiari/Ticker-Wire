@@ -278,6 +278,14 @@ jobs:
           service: ${{ env.SERVICE_NAME }}
           image: ${{ env.IMAGE_NAME }}:${{ github.sha }}
           region: ${{ env.REGION }}
+          flags: |
+            --memory=512Mi
+            --cpu=1
+            --timeout=300
+            --max-instances=10
+            --min-instances=0
+            --allow-unauthenticated
+            --set-env-vars="FIREBASE_CONFIG_PATH=/app/serviceAccountKey.json"
 
       - name: Show deployment URL
         run: |
