@@ -69,7 +69,7 @@ RUN echo "=== Debugging: Contents of /app after COPY ===" && \
 # Note: Cloud Run can also use Application Default Credentials if this file is not present
 COPY server/serviceAccountKey.json /app/serviceAccountKey.json
 
-# Verify server binary exists and set permissions
+# Verify server binary exists and inspect the script
 RUN if [ ! -f /app/bin/server ]; then \
       echo "ERROR: /app/bin/server not found!"; \
       echo "Contents of /app:"; \
@@ -78,8 +78,18 @@ RUN if [ ! -f /app/bin/server ]; then \
       ls -la /app/bin/ 2>/dev/null || echo "/app/bin does not exist"; \
       exit 1; \
     fi && \
+    echo "=== Inspecting /app/bin/server script ===" && \
+    echo "First 10 lines:" && \
+    head -10 /app/bin/server && \
+    echo "" && \
+    echo "Checking for APP_HOME or similar:" && \
+    grep -i "APP_HOME\|APPNAME\|CLASSPATH" /app/bin/server | head -5 || echo "No APP_HOME found" && \
+    echo "" && \
+    echo "Fixing line endings (CRLF to LF) if needed..." && \
+    sed -i 's/\r$//' /app/bin/server && \
     chmod +x /app/bin/server && \
-    chown -R appuser:appgroup /app
+    chown -R appuser:appgroup /app && \
+    echo "✅ Script prepared"
 
 USER appuser
 
@@ -94,8 +104,19 @@ RUN which bash || (echo "ERROR: bash not found!" && exit 1)
 
 EXPOSE 8080
 
-# Use CMD with explicit bash to ensure the script runs correctly
-# Cloud Run's __cacert_entrypoint.sh will execute this
-# Using bash explicitly ensures the script's shebang works correctly
-# WORKDIR is already set to /app above, so script will run from correct directory
-CMD ["/bin/bash", "/app/bin/server"]
+# Set APP_HOME environment variable (Gradle scripts often use this)
+ENV APP_HOME=/app
+WORKDIR /app
+
+# Create a simple start script that runs Java directly
+# This avoids issues with the Gradle-generated script
+RUN echo '#!/bin/bash' > /app/start.sh && \
+    echo 'set -e' >> /app/start.sh && \
+    echo 'cd /app' >> /app/start.sh && \
+    echo 'exec java -cp "/app/lib/*" pl.deniotokiari.tickerwire.ApplicationKt "$@"' >> /app/start.sh && \
+    chmod +x /app/start.sh && \
+    chown appuser:appgroup /app/start.sh && \
+    echo "✅ Created start.sh script"
+
+# Use the custom start script that runs Java directly
+CMD ["/app/start.sh"]
