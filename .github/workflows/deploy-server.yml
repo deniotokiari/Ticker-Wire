@@ -79,29 +79,29 @@ jobs:
           mkdir -p server/src/main/resources
           printf '%s' "$SERVICE_ACCOUNT_KEY_JSON" > server/src/main/resources/serviceAccountKey.json
 
-      - name: Build Server Distribution
-        run: ./gradlew :server:installDist --no-daemon --info
+      - name: Build Server Fat JAR
+        run: ./gradlew :server:shadowJar --no-daemon --info
 
-      - name: Verify installDist output
+      - name: Verify fat JAR output
         run: |
-          echo "=== Verifying installDist output ==="
-          if [ ! -d "server/build/install/server" ]; then
-            echo "❌ server/build/install/server directory not found!"
+          echo "=== Verifying fat JAR output ==="
+          JAR_FILE=$(find server/build/libs -name "server-*.jar" ! -name "*-sources.jar" ! -name "*-javadoc.jar" | head -1)
+          if [ -z "$JAR_FILE" ]; then
+            echo "❌ server fat JAR not found!"
+            echo "Contents of server/build/libs:"
+            ls -la server/build/libs/ || echo "Directory does not exist"
             exit 1
           fi
-          echo "Directory structure:"
-          find server/build/install/server -type f -o -type d | head -20
-          echo ""
-          echo "Checking for bin/server:"
-          ls -lh server/build/install/server/bin/server || (echo "❌ bin/server not found!" && exit 1)
+          echo "✅ Found fat JAR: $JAR_FILE"
+          echo "File size: $(ls -lh "$JAR_FILE" | awk '{print $5}')"
+          echo "Checking JAR contents:"
+          jar -tf "$JAR_FILE" | head -20
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: server-distribution
-          # Upload the parent directory to preserve the 'server' subdirectory structure
-          # This ensures server/build/install/server/ structure is maintained
-          path: server/build/install/
+          name: server-fatjar
+          path: server/build/libs/server-*.jar
           retention-days: 1
 
   # Step 3: Run server tests
@@ -149,36 +149,23 @@ jobs:
       - name: Download build artifacts
         uses: actions/download-artifact@v4
         with:
-          name: server-distribution
-          # Download to server/build/install/ to recreate the server/ subdirectory
-          path: server/build/install/
-          # GitHub Actions will create server/ subdirectory when extracting
+          name: server-fatjar
+          path: server/build/libs/
 
       - name: Verify build artifacts
         run: |
-          echo "=== Downloaded artifacts structure ==="
-          echo "Full tree of server/build/install/:"
-          find server/build/install -type f -o -type d | head -30
-          echo ""
-          echo "Contents of server/build/install/:"
-          ls -la server/build/install/ || echo "Directory does not exist!"
-          echo ""
-          echo "Contents of server/build/install/server/:"
-          ls -la server/build/install/server/ || echo "server directory does not exist!"
-          echo ""
-          echo "Contents of server/build/install/server/bin/:"
-          ls -la server/build/install/server/bin/ || echo "bin directory does not exist!"
-          echo ""
-          echo "Checking for server binary:"
-          if [ ! -f server/build/install/server/bin/server ]; then
-            echo "❌ server binary not found in artifacts!"
-            echo "Full directory tree:"
-            find server/build/install -type f 2>/dev/null || echo "No files found"
+          echo "=== Verifying downloaded fat JAR ==="
+          JAR_FILE=$(find server/build/libs -name "server-*.jar" ! -name "*-sources.jar" ! -name "*-javadoc.jar" | head -1)
+          if [ -z "$JAR_FILE" ]; then
+            echo "❌ server fat JAR not found in artifacts!"
+            echo "Contents of server/build/libs:"
+            ls -la server/build/libs/ || echo "Directory does not exist"
             exit 1
           fi
           echo "✅ Build artifacts downloaded successfully"
-          echo "Server binary found: $(ls -lh server/build/install/server/bin/server)"
-          echo "File permissions: $(stat -c '%a %n' server/build/install/server/bin/server)"
+          echo "Fat JAR found: $JAR_FILE"
+          echo "File size: $(ls -lh "$JAR_FILE" | awk '{print $5}')"
+          echo "File permissions: $(stat -c '%a %n' "$JAR_FILE" 2>/dev/null || stat -f '%A %N' "$JAR_FILE")"
 
       - name: Create serviceAccountKey.json for Docker build
         env:
@@ -239,101 +226,46 @@ jobs:
           fi
           echo "✅ $FILE exists and is valid JSON"
 
-      - name: Verify and fix artifact structure
+      - name: Verify JAR and credentials before Docker build
         run: |
-          echo "=== Verifying artifact structure ==="
-          
-          # Check if files are in the expected location
-          if [ -d "server/build/install/server" ] && [ -f "server/build/install/server/bin/server" ]; then
-            echo "✅ Files are in the correct location: server/build/install/server/"
-            find server/build/install/server -type f | head -10
-          elif [ -d "server/build/install/bin" ] && [ -f "server/build/install/bin/server" ]; then
-            echo "⚠️  Files are in server/build/install/ directly, not in server/ subdirectory"
-            echo "Restructuring to match expected location..."
-            
-            # Create the server subdirectory and move files
-            mkdir -p server/build/install/server
-            if [ -d "server/build/install/bin" ]; then
-              mv server/build/install/bin server/build/install/server/
-            fi
-            if [ -d "server/build/install/lib" ]; then
-              mv server/build/install/lib server/build/install/server/
-            fi
-            # Move any other files/directories
-            find server/build/install -maxdepth 1 -mindepth 1 ! -name server -exec mv {} server/build/install/server/ \;
-            
-            echo "✅ Restructured to server/build/install/server/"
-            ls -la server/build/install/server/
-          else
-            echo "❌ Cannot find server binary in expected locations!"
-            echo "Contents of server/build/install/:"
-            find server/build/install -type f -o -type d | head -30
+          echo "=== Final check: What Docker will see ==="
+          JAR_FILE=$(find server/build/libs -name "server-*.jar" ! -name "*-sources.jar" ! -name "*-javadoc.jar" | head -1)
+          if [ -z "$JAR_FILE" ]; then
+            echo "❌ Fat JAR not found!"
+            echo "Contents of server/build/libs:"
+            ls -la server/build/libs/ || echo "Directory does not exist"
             exit 1
           fi
-          
-          # Final verification
-          if [ ! -f "server/build/install/server/bin/server" ]; then
-            echo "❌ server/build/install/server/bin/server still not found after restructuring!"
-            exit 1
-          fi
-          echo "✅ Verified: server/build/install/server/bin/server exists"
+          echo "✅ Found fat JAR: $JAR_FILE"
+          echo "File size: $(ls -lh "$JAR_FILE" | awk '{print $5}')"
           echo ""
           echo "Checking server/serviceAccountKey.json:"
           ls -lh server/serviceAccountKey.json || echo "⚠️  server/serviceAccountKey.json not found (will use Application Default Credentials)"
 
-      - name: Final verification before Docker build
-        run: |
-          echo "=== Final check: What Docker will see ==="
-          echo "Checking server/build/install/server/bin/server:"
-          if [ -f "server/build/install/server/bin/server" ]; then
-            echo "✅ Found: $(ls -lh server/build/install/server/bin/server)"
-            echo "File is executable: $([ -x server/build/install/server/bin/server ] && echo 'YES' || echo 'NO')"
-          else
-            echo "❌ NOT FOUND!"
-            echo "Current structure:"
-            find server/build/install -type f -name "server" 2>/dev/null || echo "No 'server' file found"
-            find server/build/install -type d -name "bin" 2>/dev/null || echo "No 'bin' directory found"
-            exit 1
-          fi
-          echo ""
-          echo "Checking server/build/install/server/lib directory:"
-          if [ -d "server/build/install/server/lib" ]; then
-            JAR_COUNT=$(ls -1 server/build/install/server/lib/*.jar 2>/dev/null | wc -l)
-            echo "✅ Found lib directory with $JAR_COUNT JAR files"
-            ls -1 server/build/install/server/lib/*.jar | head -5
-          else
-            echo "❌ ERROR: lib directory not found!"
-            echo "Contents of server/build/install/server/:"
-            ls -la server/build/install/server/ || echo "server directory does not exist"
-            exit 1
-          fi
-          echo ""
-          echo "Directory tree that Docker COPY will use:"
-          tree -L 3 server/build/install/server/ 2>/dev/null || find server/build/install/server -type f | head -10
-
       - name: Build and Push Docker Image
         run: |
           VERSION="${{ needs.validate-version.outputs.version }}"
-          echo "🔨 Building Docker image with pre-built artifacts..."
+          echo "🔨 Building Docker image with fat JAR..."
           echo "Docker build context will include:"
-          echo "  - server/build/install/server/bin → /app/bin"
-          echo "  - server/build/install/server/lib → /app/lib"
+          echo "  - server/build/libs/server-*.jar → /app/server.jar"
           echo "  - server/serviceAccountKey.json → /app/serviceAccountKey.json"
           echo ""
           echo "Verifying source files exist before Docker build:"
-          ls -lh server/build/install/server/bin/server || (echo "❌ Source file missing!" && exit 1)
-          ls -d server/build/install/server/lib || (echo "❌ Source lib directory missing!" && exit 1)
+          JAR_FILE=$(find server/build/libs -name "server-*.jar" ! -name "*-sources.jar" ! -name "*-javadoc.jar" | head -1)
+          if [ -z "$JAR_FILE" ]; then
+            echo "❌ Fat JAR missing!"
+            exit 1
+          fi
+          ls -lh "$JAR_FILE" || (echo "❌ Source JAR missing!" && exit 1)
+          ls -lh server/serviceAccountKey.json || echo "⚠️  Credentials file missing (will use Application Default Credentials)"
           echo "✅ Source files verified"
           echo ""
           docker build \
             --progress=plain \
-            --no-cache \
             -t $IMAGE_NAME:${{ github.sha }} \
             -t $IMAGE_NAME:$VERSION \
             -t $IMAGE_NAME:latest \
             .
-          # Note: --no-cache ensures fresh build for debugging
-          # Can be removed once deployment is working correctly
           echo "📤 Pushing Docker images..."
           docker push $IMAGE_NAME:${{ github.sha }}
           docker push $IMAGE_NAME:$VERSION

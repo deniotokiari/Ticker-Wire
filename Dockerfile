@@ -1,5 +1,5 @@
 # Dockerfile for TickerWire Server
-# Uses pre-built artifacts (built in CI)
+# Uses pre-built fat JAR (built in CI)
 
 FROM eclipse-temurin:17-jre-jammy
 
@@ -8,40 +8,19 @@ RUN groupadd -r appgroup && useradd -r -g appgroup appuser
 
 WORKDIR /app
 
-# Copy pre-built server distribution
-# This should copy bin/, lib/, and other directories from installDist output
-COPY --chown=appuser:appgroup server/build/install/server/ /app/
+# Copy pre-built fat JAR
+COPY --chown=appuser:appgroup server/build/libs/server-*.jar /app/server.jar
 
 # Copy Firebase credentials
-COPY server/serviceAccountKey.json /app/serviceAccountKey.json
+COPY --chown=appuser:appgroup server/serviceAccountKey.json /app/serviceAccountKey.json
 
-# Verify the installation and set permissions
+# Verify the JAR file exists
 RUN echo "=== Verifying installation ===" && \
-    echo "Contents of /app:" && \
-    ls -la /app/ && \
-    echo "" && \
-    echo "=== Checking bin directory ===" && \
-    if [ -d /app/bin ]; then \
-      ls -la /app/bin/; \
-    else \
-      echo "❌ ERROR: /app/bin directory not found!"; \
+    if [ ! -f /app/server.jar ]; then \
+      echo "❌ ERROR: server.jar not found!"; \
       exit 1; \
     fi && \
-    echo "" && \
-    echo "=== Checking lib directory ===" && \
-    if [ -d /app/lib ]; then \
-      echo "✅ Found /app/lib with $(ls -1 /app/lib/*.jar | wc -l) JAR files"; \
-      ls -1 /app/lib/*.jar | head -5; \
-    else \
-      echo "❌ ERROR: /app/lib directory not found!"; \
-      echo "Full directory tree:"; \
-      find /app -type f -o -type d | head -30; \
-      exit 1; \
-    fi && \
-    echo "" && \
-    echo "=== Setting permissions ===" && \
-    chmod +x /app/bin/server && \
-    chown -R appuser:appgroup /app && \
+    echo "✅ Found server.jar: $(ls -lh /app/server.jar)" && \
     echo "✅ Installation verified"
 
 USER appuser
@@ -52,6 +31,5 @@ ENV FIREBASE_CONFIG_PATH=/app/serviceAccountKey.json
 
 EXPOSE 8080
 
-# Use the startup script from installDist
-# The script automatically sets APP_HOME and constructs CLASSPATH from /app/lib/
-CMD ["/app/bin/server"]
+# Run the fat JAR
+CMD ["java", "-jar", "/app/server.jar"]
