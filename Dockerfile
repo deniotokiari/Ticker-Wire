@@ -92,29 +92,35 @@ RUN if [ ! -f /app/bin/server ]; then \
     echo "✅ Script prepared"
 
 # Create a simple wrapper script that constructs classpath from all JARs
-# This is more reliable than wildcards or the Gradle script
-RUN echo '#!/bin/bash' > /app/start-server.sh && \
-    echo 'set -e' >> /app/start-server.sh && \
-    echo 'cd /app' >> /app/start-server.sh && \
-    echo 'echo "Starting TickerWire Server..."' >> /app/start-server.sh && \
-    echo 'echo "Working directory: $(pwd)"' >> /app/start-server.sh && \
-    echo 'echo "Java version: $(java -version 2>&1 | head -1)"' >> /app/start-server.sh && \
-    echo 'JAR_COUNT=$(find /app/lib -name "*.jar" | wc -l)' >> /app/start-server.sh && \
-    echo 'if [ "$JAR_COUNT" -eq 0 ]; then' >> /app/start-server.sh && \
-    echo '  echo "ERROR: No JAR files found in /app/lib!"' >> /app/start-server.sh && \
-    echo '  ls -la /app/lib/ || echo "Directory /app/lib does not exist"' >> /app/start-server.sh && \
-    echo '  exit 1' >> /app/start-server.sh && \
-    echo 'fi' >> /app/start-server.sh && \
-    echo 'echo "Found $JAR_COUNT JAR file(s) in /app/lib"' >> /app/start-server.sh && \
-    echo 'CLASSPATH=$(find /app/lib -name "*.jar" | tr "\n" ":")' >> /app/start-server.sh && \
-    echo 'echo "Classpath: $CLASSPATH"' >> /app/start-server.sh && \
-    echo 'echo "Starting application: pl.deniotokiari.tickerwire.ApplicationKt"' >> /app/start-server.sh && \
-    echo 'exec java -cp "$CLASSPATH" pl.deniotokiari.tickerwire.ApplicationKt "$@"' >> /app/start-server.sh && \
+# Use a here-document for more reliable script creation (avoids line ending issues)
+RUN cat > /app/start-server.sh << 'EOFSCRIPT' && \
+#!/bin/bash
+set -e
+cd /app
+echo "Starting TickerWire Server..."
+echo "Working directory: $(pwd)"
+echo "Java version: $(java -version 2>&1 | head -1)"
+JAR_COUNT=$(find /app/lib -name "*.jar" | wc -l)
+if [ "$JAR_COUNT" -eq 0 ]; then
+  echo "ERROR: No JAR files found in /app/lib!"
+  ls -la /app/lib/ || echo "Directory /app/lib does not exist"
+  exit 1
+fi
+echo "Found $JAR_COUNT JAR file(s) in /app/lib"
+CLASSPATH=$(find /app/lib -name "*.jar" | tr "\n" ":")
+echo "Classpath: $CLASSPATH"
+echo "Starting application: pl.deniotokiari.tickerwire.ApplicationKt"
+exec java -cp "$CLASSPATH" pl.deniotokiari.tickerwire.ApplicationKt "$@"
+EOFSCRIPT
     chmod +x /app/start-server.sh && \
     chown appuser:appgroup /app/start-server.sh && \
     echo "✅ Created start-server.sh wrapper" && \
-    echo "Wrapper script contents:" && \
-    cat /app/start-server.sh
+    echo "Verifying script exists and is readable:" && \
+    ls -lh /app/start-server.sh && \
+    echo "Script contents (first 5 lines):" && \
+    head -5 /app/start-server.sh && \
+    echo "Testing script can be read:" && \
+    test -r /app/start-server.sh && echo "✅ Script is readable" || echo "❌ Script is NOT readable"
 
 USER appuser
 
@@ -130,15 +136,13 @@ EXPOSE 8080
 ENV APP_HOME=/app
 WORKDIR /app
 
-# Verify script and JARs are present
-RUN test -f /app/start-server.sh || (echo "ERROR: /app/start-server.sh not found!" && exit 1) && \
-    test -x /app/start-server.sh || (echo "ERROR: /app/start-server.sh is not executable!" && exit 1) && \
-    JAR_COUNT=$(find /app/lib -name "*.jar" | wc -l) && \
+# Verify JARs are present
+RUN JAR_COUNT=$(find /app/lib -name "*.jar" | wc -l) && \
     echo "Found $JAR_COUNT JAR file(s) in /app/lib" && \
     if [ "$JAR_COUNT" -eq 0 ]; then echo "ERROR: No JAR files found!" && exit 1; fi && \
-    echo "✅ Script and JAR files verified"
+    echo "✅ JAR files verified"
 
-# Use the wrapper script - explicitly call bash to ensure it works with Cloud Run's entrypoint
-# Cloud Run's __cacert_entrypoint.sh does `exec "$@"`, so it will execute: /bin/bash /app/start-server.sh
-# This is more reliable than relying on the script's shebang
-CMD ["/bin/bash", "/app/start-server.sh"]
+# Run Java directly - construct classpath and execute in one command
+# Cloud Run's __cacert_entrypoint.sh does `exec "$@"`, so it will execute: /bin/bash -c "..."
+# This avoids any script file issues - everything is inline
+CMD ["/bin/sh", "-c", "cd /app && CLASSPATH=$(find /app/lib -name '*.jar' | tr '\\n' ':') && exec java -cp \"$CLASSPATH\" pl.deniotokiari.tickerwire.ApplicationKt"]
