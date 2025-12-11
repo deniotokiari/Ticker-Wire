@@ -56,8 +56,8 @@ object FirebaseConfig {
                 .build()
         }
 
-        // Option 4: Look in /app directory (Docker)
-        val dockerFile = File("/app/serviceAccountKey.json")
+        // Option 4: Look in home directory (Docker/Cloud Run)
+        val dockerFile = File("/home/appuser/serviceAccountKey.json")
         if (dockerFile.exists()) {
             logger.info("Using Firebase credentials from Docker path: ${dockerFile.absolutePath}")
             return FirebaseOptions.builder()

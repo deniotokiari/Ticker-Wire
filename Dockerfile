@@ -33,24 +33,28 @@ RUN dos2unix gradlew && chmod +x gradlew \
 # Runtime
 FROM --platform=linux/amd64 eclipse-temurin:17-jre-jammy
 
-WORKDIR /app
+# Use /home/appuser instead of /app (Cloud Run might have issues with /app)
+RUN useradd -m -u 1000 appuser
+WORKDIR /home/appuser
 
-# Copy the fat jar (use exact filename, not wildcard)
-COPY --from=builder /build/server/build/libs/server-all.jar /app/server.jar
+# Copy the fat jar
+COPY --from=builder /build/server/build/libs/server-all.jar /home/appuser/server.jar
 
 # Copy service account key
-COPY server/src/main/resources/serviceAccountKey.json /app/serviceAccountKey.json
+COPY server/src/main/resources/serviceAccountKey.json /home/appuser/serviceAccountKey.json
 
-# Verify and set permissions (Cloud Run runs as non-root)
-RUN ls -la /app/ && test -f /app/server.jar && echo "✅ server.jar exists" \
-    && chmod 644 /app/server.jar \
-    && chmod 644 /app/serviceAccountKey.json \
-    && chmod 755 /app
+# Set ownership and permissions
+RUN chown -R appuser:appuser /home/appuser \
+    && chmod 644 /home/appuser/server.jar \
+    && chmod 644 /home/appuser/serviceAccountKey.json \
+    && ls -la /home/appuser/
+
+USER appuser
 
 ENV PORT=8080
-ENV FIREBASE_CONFIG_PATH=/app/serviceAccountKey.json
+ENV FIREBASE_CONFIG_PATH=/home/appuser/serviceAccountKey.json
 
 EXPOSE 8080
 
-# Run the server using explicit classpath (more reliable than -jar)
-CMD ["java", "-XX:+UseContainerSupport", "-XX:MaxRAMPercentage=75.0", "-cp", "/app/server.jar", "pl.deniotokiari.tickerwire.ApplicationKt"]
+# Run the server
+CMD ["java", "-XX:+UseContainerSupport", "-XX:MaxRAMPercentage=75.0", "-jar", "/home/appuser/server.jar"]

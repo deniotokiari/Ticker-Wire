@@ -122,8 +122,14 @@ jobs:
       - name: Verify image locally
         run: |
           echo "🔍 Verifying image..."
-          docker run --rm --entrypoint ls ${{ env.IMAGE }}:${{ github.sha }} -la /app/
+          docker run --rm --entrypoint ls ${{ env.IMAGE }}:${{ github.sha }} -la /home/appuser/
           docker run --rm --entrypoint java ${{ env.IMAGE }}:${{ github.sha }} -version
+          echo "🔍 Checking JAR contents for ApplicationKt..."
+          docker run --rm --entrypoint sh ${{ env.IMAGE }}:${{ github.sha }} -c "jar -tf /home/appuser/server.jar | grep -i application | head -20"
+          echo "🔍 Checking JAR manifest..."
+          docker run --rm --entrypoint sh ${{ env.IMAGE }}:${{ github.sha }} -c "unzip -p /home/appuser/server.jar META-INF/MANIFEST.MF"
+          echo "🔍 Testing JAR execution..."
+          docker run --rm ${{ env.IMAGE }}:${{ github.sha }} --help || echo "Server doesn't support --help (expected)"
           echo "✅ Image verification complete"
 
       - name: Push Docker image
@@ -141,7 +147,7 @@ jobs:
             --allow-unauthenticated \
             --memory 512Mi \
             --port 8080 \
-            --set-env-vars "FIREBASE_CONFIG_PATH=/app/serviceAccountKey.json" \
+            --set-env-vars "FIREBASE_CONFIG_PATH=/home/appuser/serviceAccountKey.json" \
             --quiet
 
       - name: Show deployment URL
