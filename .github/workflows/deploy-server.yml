@@ -82,11 +82,25 @@ jobs:
       - name: Build Server Distribution
         run: ./gradlew :server:installDist --no-daemon --info
 
+      - name: Verify installDist output
+        run: |
+          echo "=== Verifying installDist output ==="
+          if [ ! -d "server/build/install/server" ]; then
+            echo "❌ server/build/install/server directory not found!"
+            exit 1
+          fi
+          echo "Directory structure:"
+          find server/build/install/server -type f -o -type d | head -20
+          echo ""
+          echo "Checking for bin/server:"
+          ls -lh server/build/install/server/bin/server || (echo "❌ bin/server not found!" && exit 1)
+
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: server-distribution
           path: server/build/install/server/
+          retention-days: 1
 
   # Step 3: Run server tests
   test-server:
@@ -134,15 +148,33 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: server-distribution
-          path: server/build/install/server/
+          path: server/build/install/
 
       - name: Verify build artifacts
         run: |
-          echo "=== Downloaded artifacts ==="
-          ls -la server/build/install/server/
-          ls -la server/build/install/server/bin/
-          test -f server/build/install/server/bin/server || (echo "❌ server binary not found in artifacts!" && exit 1)
+          echo "=== Downloaded artifacts structure ==="
+          echo "Full tree of server/build/install/:"
+          find server/build/install -type f -o -type d | head -30
+          echo ""
+          echo "Contents of server/build/install/:"
+          ls -la server/build/install/ || echo "Directory does not exist!"
+          echo ""
+          echo "Contents of server/build/install/server/:"
+          ls -la server/build/install/server/ || echo "server directory does not exist!"
+          echo ""
+          echo "Contents of server/build/install/server/bin/:"
+          ls -la server/build/install/server/bin/ || echo "bin directory does not exist!"
+          echo ""
+          echo "Checking for server binary:"
+          if [ ! -f server/build/install/server/bin/server ]; then
+            echo "❌ server binary not found in artifacts!"
+            echo "Full directory tree:"
+            find server/build/install -type f 2>/dev/null || echo "No files found"
+            exit 1
+          fi
           echo "✅ Build artifacts downloaded successfully"
+          echo "Server binary found: $(ls -lh server/build/install/server/bin/server)"
+          echo "File permissions: $(stat -c '%a %n' server/build/install/server/bin/server)"
 
       - name: Create serviceAccountKey.json for Docker build
         env:
@@ -203,11 +235,27 @@ jobs:
           fi
           echo "✅ $FILE exists and is valid JSON"
 
+      - name: Verify files before Docker build
+        run: |
+          echo "=== Files that will be copied into Docker ==="
+          echo "Checking server/build/install/server/:"
+          if [ -d "server/build/install/server" ]; then
+            find server/build/install/server -type f | head -20
+            echo "Total files: $(find server/build/install/server -type f | wc -l)"
+          else
+            echo "❌ server/build/install/server/ does not exist!"
+            exit 1
+          fi
+          echo ""
+          echo "Checking server/serviceAccountKey.json:"
+          ls -lh server/serviceAccountKey.json || echo "⚠️  server/serviceAccountKey.json not found (will use Application Default Credentials)"
+
       - name: Build and Push Docker Image
         run: |
           VERSION="${{ needs.validate-version.outputs.version }}"
           echo "🔨 Building Docker image with pre-built artifacts..."
           docker build \
+            --progress=plain \
             -t $IMAGE_NAME:${{ github.sha }} \
             -t $IMAGE_NAME:$VERSION \
             -t $IMAGE_NAME:latest \
