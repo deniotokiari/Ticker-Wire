@@ -99,7 +99,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: server-distribution
-          path: server/build/install/server/
+          # Upload the parent directory to preserve the 'server' subdirectory structure
+          # This ensures server/build/install/server/ structure is maintained
+          path: server/build/install/
           retention-days: 1
 
   # Step 3: Run server tests
@@ -148,7 +150,9 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: server-distribution
+          # Download to server/build/install/ to recreate the server/ subdirectory
           path: server/build/install/
+          # GitHub Actions will create server/ subdirectory when extracting
 
       - name: Verify build artifacts
         run: |
