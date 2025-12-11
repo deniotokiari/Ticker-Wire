@@ -296,6 +296,18 @@ jobs:
             exit 1
           fi
           echo ""
+          echo "Checking server/build/install/server/lib directory:"
+          if [ -d "server/build/install/server/lib" ]; then
+            JAR_COUNT=$(ls -1 server/build/install/server/lib/*.jar 2>/dev/null | wc -l)
+            echo "✅ Found lib directory with $JAR_COUNT JAR files"
+            ls -1 server/build/install/server/lib/*.jar | head -5
+          else
+            echo "❌ ERROR: lib directory not found!"
+            echo "Contents of server/build/install/server/:"
+            ls -la server/build/install/server/ || echo "server directory does not exist"
+            exit 1
+          fi
+          echo ""
           echo "Directory tree that Docker COPY will use:"
           tree -L 3 server/build/install/server/ 2>/dev/null || find server/build/install/server -type f | head -10
 

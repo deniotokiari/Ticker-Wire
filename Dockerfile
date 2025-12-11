@@ -9,23 +9,49 @@ RUN groupadd -r appgroup && useradd -r -g appgroup appuser
 WORKDIR /app
 
 # Copy pre-built server distribution
+# This should copy bin/, lib/, and other directories from installDist output
 COPY --chown=appuser:appgroup server/build/install/server/ /app/
 
 # Copy Firebase credentials
 COPY server/serviceAccountKey.json /app/serviceAccountKey.json
 
-# Set permissions
-RUN chmod +x /app/bin/server && chown -R appuser:appgroup /app
+# Verify the installation and set permissions
+RUN echo "=== Verifying installation ===" && \
+    echo "Contents of /app:" && \
+    ls -la /app/ && \
+    echo "" && \
+    echo "=== Checking bin directory ===" && \
+    if [ -d /app/bin ]; then \
+      ls -la /app/bin/; \
+    else \
+      echo "❌ ERROR: /app/bin directory not found!"; \
+      exit 1; \
+    fi && \
+    echo "" && \
+    echo "=== Checking lib directory ===" && \
+    if [ -d /app/lib ]; then \
+      echo "✅ Found /app/lib with $(ls -1 /app/lib/*.jar | wc -l) JAR files"; \
+      ls -1 /app/lib/*.jar | head -5; \
+    else \
+      echo "❌ ERROR: /app/lib directory not found!"; \
+      echo "Full directory tree:"; \
+      find /app -type f -o -type d | head -30; \
+      exit 1; \
+    fi && \
+    echo "" && \
+    echo "=== Setting permissions ===" && \
+    chmod +x /app/bin/server && \
+    chown -R appuser:appgroup /app && \
+    echo "✅ Installation verified"
 
 USER appuser
 
 # Set environment variables
 ENV PORT=8080
 ENV FIREBASE_CONFIG_PATH=/app/serviceAccountKey.json
-ENV APP_HOME=/app
 
 EXPOSE 8080
 
-# Construct classpath using find and run Java
-# This is the most reliable way to build the classpath
-CMD ["/bin/sh", "-c", "cd /app && CLASSPATH=$(find /app/lib -name '*.jar' | tr '\\n' ':') && exec java -cp \"$CLASSPATH\" pl.deniotokiari.tickerwire.ApplicationKt"]
+# Use the startup script from installDist
+# The script automatically sets APP_HOME and constructs CLASSPATH from /app/lib/
+CMD ["/app/bin/server"]
