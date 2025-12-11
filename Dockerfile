@@ -89,8 +89,13 @@ USER appuser
 ENV PORT=8080
 ENV FIREBASE_CONFIG_PATH=/app/serviceAccountKey.json
 
+# Ensure bash is available (should already be in base image)
+RUN which bash || (echo "ERROR: bash not found!" && exit 1)
+
 EXPOSE 8080
 
-# Use CMD (Cloud Run's __cacert_entrypoint.sh will execute this)
-# The __cacert_entrypoint.sh is Cloud Run's wrapper that handles certs and env setup
-CMD ["/app/bin/server"]
+# Use CMD with explicit bash to ensure the script runs correctly
+# Cloud Run's __cacert_entrypoint.sh will execute this
+# Using bash explicitly ensures the script's shebang works correctly
+# WORKDIR is already set to /app above, so script will run from correct directory
+CMD ["/bin/bash", "/app/bin/server"]
