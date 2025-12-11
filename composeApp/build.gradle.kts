@@ -2,6 +2,7 @@ import org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi
 import org.jetbrains.kotlin.gradle.ExperimentalWasmDsl
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.plugin.KotlinSourceSetTree
+import java.util.Properties
 
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
@@ -13,6 +14,16 @@ plugins {
     alias(libs.plugins.googleServices)
     alias(libs.plugins.screenshot)
 }
+
+// Read local.properties
+val localProperties = Properties().apply {
+    val localFile = rootProject.file("local.properties")
+    if (localFile.exists()) {
+        localFile.inputStream().use { load(it) }
+    }
+}
+
+val apiUri = localProperties.getProperty("api.uri") ?: "http://localhost:8080/api/v1"
 
 kotlin {
     // Suppress expect/actual classes Beta warning
@@ -113,7 +124,36 @@ kotlin {
 
     sourceSets.named("commonMain").configure {
         kotlin.srcDir("build/generated/ksp/metadata/commonMain/kotlin")
+        kotlin.srcDir("build/generated/kotlin")
     }
+}
+
+// Generate ApiConfig.kt from local.properties
+tasks.register("generateApiConfig") {
+    val outputDir = file("build/generated/kotlin/pl/deniotokiari/tickerwire/common/config")
+    val outputFile = file("$outputDir/ApiConfig.kt")
+    val localPropertiesFile = rootProject.file("local.properties")
+    
+    inputs.file(localPropertiesFile).optional()
+    outputs.file(outputFile)
+    
+    // Mark as not compatible with configuration cache
+    notCompatibleWithConfigurationCache("Reading local.properties at runtime")
+    
+    doFirst {
+        val apiUriValue = apiUri
+        outputDir.mkdirs()
+        outputFile.writeText("""
+            package pl.deniotokiari.tickerwire.common.config
+            
+            internal const val API_BASE_URL = "$apiUriValue"
+        """.trimIndent())
+    }
+}
+
+// Make compilation depend on config generation
+tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
+    dependsOn("generateApiConfig")
 }
 
 android {
@@ -161,8 +201,14 @@ dependencies {
     implementation(libs.firebase.analytics)
 }
 
+// Make KSP tasks depend on API config generation
+tasks.matching { it.name.startsWith("ksp") }
+    .configureEach {
+        dependsOn("generateApiConfig")
+    }
+
 tasks.matching { it.name.startsWith("ksp") && it.name != "kspCommonMainKotlinMetadata" }
     .configureEach {
         dependsOn("kspCommonMainKotlinMetadata")
-}
+    }
 

@@ -1,13 +1,14 @@
 package pl.deniotokiari.tickerwire.common.data.store
 
 import org.koin.core.annotation.Single
+import pl.deniotokiari.tickerwire.common.config.API_BASE_URL
 import pl.deniotokiari.tickerwire.common.data.HttpClient
 import pl.deniotokiari.tickerwire.model.Ticker
 import pl.deniotokiari.tickerwire.model.dto.TickerDto
 import pl.deniotokiari.tickerwire.model.dto.TickerInfoDto
 import pl.deniotokiari.tickerwire.model.dto.TickerNewsDto
 
-private const val API_URI = "http://0.0.0.0:8080/api/v1"
+private const val API_URI = "$API_BASE_URL/api/v1"
 
 @Single
 class TickerRemoteDataSource(

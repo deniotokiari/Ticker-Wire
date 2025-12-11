@@ -49,6 +49,13 @@ jobs:
           mkdir -p composeApp
           printf '%s' "$GOOGLE_SERVICES_JSON" > composeApp/google-services.json
 
+      - name: Create local.properties with API URI
+        env:
+          API_URI: ${{ secrets.API_URI }}
+        run: |
+          # Append API URI to local.properties (creates file if it doesn't exist)
+          echo "api.uri=$API_URI" >> local.properties
+
       - name: Build Android
         run: ./gradlew :composeApp:assembleDebug --build-cache --configuration-cache
 
@@ -105,6 +112,13 @@ jobs:
           fi
           cd iosApp && pod install --repo-update
 
+      - name: Create local.properties with API URI
+        env:
+          API_URI: ${{ secrets.API_URI }}
+        run: |
+          # Append API URI to local.properties (creates file if it doesn't exist)
+          echo "api.uri=$API_URI" >> local.properties
+
       - name: Build iOS
         run: ./gradlew :composeApp:linkDebugFrameworkIosSimulatorArm64 --build-cache --configuration-cache
 
@@ -143,6 +157,13 @@ jobs:
         run: |
           mkdir -p composeApp/src/webMain/resources
           printf '%s' "$FIREBASE_CONFIG_JS" > composeApp/src/webMain/resources/firebaseConfig.js
+
+      - name: Create local.properties with API URI
+        env:
+          API_URI: ${{ secrets.API_URI }}
+        run: |
+          # Append API URI to local.properties (creates file if it doesn't exist)
+          echo "api.uri=$API_URI" >> local.properties
 
       - name: Build Web JS
         env:
@@ -191,6 +212,13 @@ jobs:
         run: |
           mkdir -p composeApp/src/webMain/resources
           printf '%s' "$FIREBASE_CONFIG_JS" > composeApp/src/webMain/resources/firebaseConfig.js
+
+      - name: Create local.properties with API URI
+        env:
+          API_URI: ${{ secrets.API_URI }}
+        run: |
+          # Append API URI to local.properties (creates file if it doesn't exist)
+          echo "api.uri=$API_URI" >> local.properties
 
       - name: Build Web WasmJS
         env:
@@ -274,6 +302,13 @@ jobs:
           mkdir -p composeApp
           printf '%s' "$GOOGLE_SERVICES_JSON" > composeApp/google-services.json
 
+      - name: Create local.properties with API URI
+        env:
+          API_URI: ${{ secrets.API_URI }}
+        run: |
+          # Append API URI to local.properties (creates file if it doesn't exist)
+          echo "api.uri=$API_URI" >> local.properties
+
       - name: Run Screenshot Tests
         run: ./gradlew :composeApp:validateDebugScreenshotTest --build-cache --configuration-cache
 
@@ -323,6 +358,13 @@ jobs:
         run: |
           mkdir -p composeApp/src/webMain/resources
           printf '%s' "$FIREBASE_CONFIG_JS" > composeApp/src/webMain/resources/firebaseConfig.js
+
+      - name: Create local.properties with API URI
+        env:
+          API_URI: ${{ secrets.API_URI }}
+        run: |
+          # Append API URI to local.properties (creates file if it doesn't exist)
+          echo "api.uri=$API_URI" >> local.properties
 
       - name: Run Compose App Tests
         run: ./gradlew :composeApp:allTests --build-cache --configuration-cache
