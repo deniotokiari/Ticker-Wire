@@ -6,6 +6,8 @@ import androidx.compose.runtime.getValue
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import org.jetbrains.compose.ui.tooling.preview.Preview
 import org.koin.compose.KoinApplication
 import org.koin.compose.viewmodel.koinViewModel
@@ -29,6 +31,8 @@ fun App() {
             NavHost(
                 navController = navController,
                 startDestination = Route.Home,
+                enterTransition = { EnterTransition.None },
+                exitTransition = { ExitTransition.None },
             ) {
                 composable<Route.Home> { HomeScreen(navController) }
                 composable<Route.Search> { SearchScreen(navController) }
