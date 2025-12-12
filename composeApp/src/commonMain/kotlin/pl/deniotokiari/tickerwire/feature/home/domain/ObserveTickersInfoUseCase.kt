@@ -12,9 +12,10 @@ import pl.deniotokiari.tickerwire.model.TickerData
 class ObserveTickersInfoUseCase(
     private val tickerRepository: TickerRepository,
     private val connectivityRepository: ConnectivityRepository,
+    private val observeWatchlistItemsUseCase: ObserveWatchlistItemsUseCase,
 ) {
-    operator fun invoke(tickers: Flow<List<Ticker>>): Flow<Map<Ticker, TickerData>> = flow {
-        tickers.collect { tickers ->
+    operator fun invoke(): Flow<Map<Ticker, TickerData>> = flow {
+        observeWatchlistItemsUseCase().collect { tickers ->
             val cached = tickerRepository.info(tickers, ttlSkip = true)
 
             if (cached.isNotEmpty()) {

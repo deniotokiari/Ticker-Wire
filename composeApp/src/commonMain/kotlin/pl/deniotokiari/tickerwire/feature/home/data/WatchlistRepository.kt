@@ -22,14 +22,14 @@ class WatchlistRepository(
     }
 
     suspend fun addTicker(ticker: Ticker) {
-        _items.emit(_items.value + ticker)
-
         watchlistLocalDataSource.addTicker(ticker)
+
+        _items.emit(_items.value + ticker)
     }
 
     suspend fun removeTicker(ticker: Ticker) {
-        _items.emit(_items.value - ticker)
-
         watchlistLocalDataSource.removeTicker(ticker)
+
+        _items.emit(_items.value - ticker)
     }
 }

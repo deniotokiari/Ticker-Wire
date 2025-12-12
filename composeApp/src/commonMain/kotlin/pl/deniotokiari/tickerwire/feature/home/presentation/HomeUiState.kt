@@ -10,6 +10,7 @@ data class HomeUiState(
     val isRefreshing: Boolean = false,
     val isDarkTheme: Boolean = false,
     val newsUiState: NewsUiState = NewsUiState.Loading,
+    val visitedNews: Set<TickerNews> = emptySet(),
     val errorUiState: ErrorUiState = ErrorUiState.None,
 ) {
     sealed interface NewsUiState {

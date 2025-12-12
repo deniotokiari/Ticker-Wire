@@ -173,7 +173,11 @@ private fun HomeContent(
                 )
             }
 
-            newsContent(newsUiState = uiState.newsUiState, onAction = onAction)
+            newsContent(
+                newsUiState = uiState.newsUiState,
+                visitedNews = uiState.visitedNews,
+                onAction = onAction,
+            )
         }
 
         when (uiState.errorUiState) {
@@ -305,6 +309,7 @@ private fun LazyListScope.watchListContent(
 }
 
 private fun LazyListScope.newsContent(
+    visitedNews: Set<TickerNews>,
     newsUiState: HomeUiState.NewsUiState,
     onAction: (HomeUiAction) -> Unit
 ) {
@@ -339,10 +344,7 @@ private fun LazyListScope.newsContent(
                                 if (newsUrl != null) {
                                     Modifier.clickable {
                                         onAction(
-                                            HomeUiAction.OnNewsClick(
-                                                item.ticker.symbol,
-                                                newsUrl
-                                            )
+                                            HomeUiAction.OnNewsClick(item)
                                         )
                                     }
                                 } else {
@@ -374,7 +376,11 @@ private fun LazyListScope.newsContent(
                                 .fillMaxWidth(),
                             text = item.title,
                             style = MaterialTheme.typography.bodyMedium.copy(
-                                color = MaterialTheme.colorScheme.onSurface,
+                                color = if (visitedNews.contains(item)) {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                } else {
+                                    MaterialTheme.colorScheme.onSurface
+                                },
                                 fontWeight = FontWeight.Normal,
                             ),
                         )
@@ -506,39 +512,40 @@ private fun HomeContentLightPreview() = AppTheme {
         ),
     )
     val now = 0L
+    val news = listOf(
+        TickerNews(
+            ticker = tickers[0],
+            title = "Apple supplier Foxconn's Q2 profit plunges amid weakening demand.",
+            provider = "Bloomberg",
+            dateTimeFormatted = "5m ago",
+            timestamp = now,
+            url = "https://example.com/news/1",
+        ),
+        TickerNews(
+            ticker = tickers[1],
+            title = "Google announces major AI advancements for its search engine.",
+            dateTimeFormatted = "12m ago",
+            provider = null,
+            timestamp = now + 1,
+            url = null,
+        ),
+        TickerNews(
+            ticker = tickers[2],
+            title = "Tesla faces new investigation over Autopilot claims, shares dip.",
+            provider = "WSJ",
+            dateTimeFormatted = "25m ago",
+            timestamp = now + 2,
+            url = "https://example.com/news/3",
+        ),
+    )
+    val visitedNews = setOf(news.first())
 
     HomeContent(
         uiState = HomeUiState(
             tickers = tickers,
-            newsUiState = HomeUiState.NewsUiState.Content(
-                listOf(
-                    TickerNews(
-                        ticker = tickers[0],
-                        title = "Apple supplier Foxconn's Q2 profit plunges amid weakening demand.",
-                        provider = "Bloomberg",
-                        dateTimeFormatted = "5m ago",
-                        timestamp = now,
-                        url = "https://example.com/news/1",
-                    ),
-                    TickerNews(
-                        ticker = tickers[1],
-                        title = "Google announces major AI advancements for its search engine.",
-                        dateTimeFormatted = "12m ago",
-                        provider = null,
-                        timestamp = now + 1,
-                        url = null,
-                    ),
-                    TickerNews(
-                        ticker = tickers[2],
-                        title = "Tesla faces new investigation over Autopilot claims, shares dip.",
-                        provider = "WSJ",
-                        dateTimeFormatted = "25m ago",
-                        timestamp = now + 2,
-                        url = "https://example.com/news/3",
-                    ),
-                ),
-            ),
+            newsUiState = HomeUiState.NewsUiState.Content(news = news),
             info = info,
+            visitedNews = visitedNews,
             isRefreshing = true,
             errorUiState = HomeUiState.ErrorUiState.Error,
         ),
@@ -592,41 +599,41 @@ private fun HomeContentDarkPreview() = AppTheme(darkTheme = true) {
         ),
     )
     val now = 0L
+    val news = listOf(
+        TickerNews(
+            ticker = tickers[0],
+            title = "Apple supplier Foxconn's Q2 profit plunges amid weakening demand.",
+            provider = "Bloomberg",
+            dateTimeFormatted = "5m ago",
+            timestamp = now,
+            url = "https://example.com/news/1",
+        ),
+        TickerNews(
+            ticker = tickers[1],
+            title = "Google announces major AI advancements for its search engine.",
+            dateTimeFormatted = "12m ago",
+            provider = null,
+            timestamp = now + 1,
+            url = null,
+        ),
+        TickerNews(
+            ticker = tickers[2],
+            title = "Tesla faces new investigation over Autopilot claims, shares dip.",
+            provider = "WSJ",
+            dateTimeFormatted = "25m ago",
+            timestamp = now + 2,
+            url = "https://example.com/news/3",
+        ),
+    )
+    val visitedNews = setOf(news.first())
 
     HomeContent(
         uiState = HomeUiState(
             tickers = tickers,
-            newsUiState = HomeUiState.NewsUiState.Content(
-                listOf(
-                    TickerNews(
-                        ticker = tickers[0],
-                        title = "Apple supplier Foxconn's Q2 profit plunges amid weakening demand.",
-                        provider = "Bloomberg",
-                        dateTimeFormatted = "5m ago",
-                        timestamp = now,
-                        url = "https://example.com/news/1",
-                    ),
-                    TickerNews(
-                        ticker = tickers[1],
-                        title = "Google announces major AI advancements for its search engine.",
-                        provider = null,
-                        dateTimeFormatted = "12m ago",
-                        timestamp = now + 1,
-                        url = null,
-                    ),
-                    TickerNews(
-                        ticker = tickers[2],
-                        title = "Tesla faces new investigation over Autopilot claims, shares dip.",
-                        provider = "WSJ",
-                        dateTimeFormatted = "25m ago",
-                        timestamp = now + 2,
-                        url = "https://example.com/news/3",
-                    ),
-                ),
-            ),
+            newsUiState = HomeUiState.NewsUiState.Content(news = news),
             info = info,
+            visitedNews = visitedNews,
             isRefreshing = true,
-            isDarkTheme = true,
             errorUiState = HomeUiState.ErrorUiState.Error,
         ),
         onAction = {},

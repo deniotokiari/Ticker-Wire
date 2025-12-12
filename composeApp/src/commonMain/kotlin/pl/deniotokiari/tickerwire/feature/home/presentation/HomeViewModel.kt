@@ -21,10 +21,13 @@ import pl.deniotokiari.tickerwire.common.domain.IsDarkThemeUseCase
 import pl.deniotokiari.tickerwire.feature.home.domain.AddTickerToWatchlistUseCase
 import pl.deniotokiari.tickerwire.feature.home.domain.ObserveTickersInfoUseCase
 import pl.deniotokiari.tickerwire.feature.home.domain.ObserveTickersNewsUseCase
+import pl.deniotokiari.tickerwire.feature.home.domain.ObserveVisitedTickerNewsUseCase
 import pl.deniotokiari.tickerwire.feature.home.domain.ObserveWatchlistItemsUseCase
 import pl.deniotokiari.tickerwire.feature.home.domain.RefreshUseCase
 import pl.deniotokiari.tickerwire.feature.home.domain.RemoveTickerFromWatchlistUseCase
+import pl.deniotokiari.tickerwire.feature.home.domain.SetTickerNewsItemVisitedUseCase
 import pl.deniotokiari.tickerwire.model.Ticker
+import pl.deniotokiari.tickerwire.model.TickerNews
 
 private const val REFRESH_DELAY = 5_000L
 
@@ -32,14 +35,16 @@ private const val REFRESH_DELAY = 5_000L
 class HomeViewModel(
     isDarkThemeUseCase: IsDarkThemeUseCase,
     private val analytics: Analytics,
+    private val addTickerToWatchlistUseCase: AddTickerToWatchlistUseCase,
     private val applyDarkThemeUseCase: ApplyDarkThemeUseCase,
     private val applyLightThemeUseCase: ApplyLightThemeUseCase,
-    private val addTickerToWatchlistUseCase: AddTickerToWatchlistUseCase,
-    private val removeTickerFromWatchlistUseCase: RemoveTickerFromWatchlistUseCase,
-    private val observeWatchlistItemsUseCase: ObserveWatchlistItemsUseCase,
     private val observeTickersInfoUseCase: ObserveTickersInfoUseCase,
     private val observeTickersNewsUseCase: ObserveTickersNewsUseCase,
+    private val observeVisitedTickerNewsUseCase: ObserveVisitedTickerNewsUseCase,
+    private val observeWatchlistItemsUseCase: ObserveWatchlistItemsUseCase,
     private val refreshUseCase: RefreshUseCase,
+    private val removeTickerFromWatchlistUseCase: RemoveTickerFromWatchlistUseCase,
+    private val setTickerNewsItemVisitedUseCase: SetTickerNewsItemVisitedUseCase,
 ) : ViewModel() {
     private val _uiState: MutableStateFlow<HomeUiState> =
         MutableStateFlow(HomeUiState(isDarkTheme = isDarkThemeUseCase()))
@@ -63,6 +68,14 @@ class HomeViewModel(
             }
         }
 
+        viewModelScope.launch {
+            observeVisitedTickerNewsUseCase().collect { items ->
+                _uiState.update { state ->
+                    state.copy(visitedNews = items)
+                }
+            }
+        }
+
         subscribeForUpdates()
     }
 
@@ -73,7 +86,7 @@ class HomeViewModel(
             is HomeUiAction.OnRemoveTicker -> handleOnRemoveTicker(action.item)
             HomeUiAction.OnSearchClick -> handleOnSearchClick()
             HomeUiAction.OnThemeChangeClick -> handleOnThemeChangeClick()
-            is HomeUiAction.OnNewsClick -> handleOnNewsClick(action.ticker, action.url)
+            is HomeUiAction.OnNewsClick -> handleOnNewsClick(action.item)
             HomeUiAction.OnErrorMessageActionClick -> handleOnErrorMessageActionClick()
             HomeUiAction.OnErrorMessageClose -> handleOnErrorMessageClose()
         }
@@ -100,12 +113,14 @@ class HomeViewModel(
         }
     }
 
-    private fun handleOnNewsClick(ticker: String, url: String?) {
+    private fun handleOnNewsClick(item: TickerNews) {
         // Track news click
-        analytics.logNewsClicked(ticker, url != null)
+        analytics.logNewsClicked(item.ticker.symbol, item.url != null)
 
         viewModelScope.launch {
-            url?.let { _uiEvent.emit(HomeUiEvent.OpenNewsUri(url)) }
+            setTickerNewsItemVisitedUseCase(item)
+
+            item.url?.let { url -> _uiEvent.emit(HomeUiEvent.OpenNewsUri(url)) }
         }
     }
 
@@ -114,7 +129,7 @@ class HomeViewModel(
         newsUpdatesJob?.cancel()
 
         infoUpdatesJob = viewModelScope.launch {
-            observeTickersInfoUseCase(observeWatchlistItemsUseCase())
+            observeTickersInfoUseCase()
                 .catch {
                     emit(emptyMap())
                     _uiState.update { state ->
@@ -129,7 +144,7 @@ class HomeViewModel(
         }
 
         newsUpdatesJob = viewModelScope.launch {
-            observeTickersNewsUseCase(observeWatchlistItemsUseCase())
+            observeTickersNewsUseCase()
                 .catch {
                     emit(emptyList())
                     _uiState.update { state ->
