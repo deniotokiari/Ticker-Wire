@@ -14,37 +14,36 @@ class ObserveVisitedTickerNewsUseCase(
     private val observeTickersNewsUseCase: ObserveTickersNewsUseCase,
 ) {
     operator fun invoke(): Flow<Set<TickerNews>> = channelFlow {
-        coroutineScope {
-            var lastNews: List<TickerNews>? = null
-            var lastVisited: Set<TickerNews>? = null
+        var lastNews: List<TickerNews>? = null
+        var lastVisited: Set<TickerNews>? = null
 
-            suspend fun merge() {
-                val news = lastNews ?: return
-                val visited = lastVisited ?: return
-                val result = mutableSetOf<TickerNews>()
+        suspend fun merge() {
+            val news = lastNews ?: return
+            val visited = lastVisited ?: return
+            val result = mutableSetOf<TickerNews>()
 
-                for (item in news) {
-                    if (visited.contains(item)) {
-                        result.add(item)
-                    }
-                }
-
-                channel.send(result)
-            }
-
-            launch {
-                visitedTickerNewsRepository.items.collect { items ->
-                    lastVisited = items
-
-                    merge()
+            for (item in news) {
+                if (visited.contains(item)) {
+                    result.add(item)
                 }
             }
-            launch {
-                observeTickersNewsUseCase().collect { items ->
-                    lastNews = items
 
-                    merge()
-                }
+            channel.send(result)
+        }
+
+        launch {
+            visitedTickerNewsRepository.items.collect { items ->
+                lastVisited = items
+
+                merge()
+            }
+        }
+
+        launch {
+            observeTickersNewsUseCase().collect { items ->
+                lastNews = items
+
+                merge()
             }
         }
     }
