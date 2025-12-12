@@ -33,7 +33,7 @@ class FirestoreCacheFactory(
     fun <T : Any> newsCache(
         name: String,
         serializer: KSerializer<T>,
-        ttl: Duration = Duration.ofMinutes(15),
+        ttl: Duration = Duration.ofHours(1),
     ): FirestoreCacheService<T> = FirestoreCacheService(
         name = name,
         serializer = serializer,
@@ -53,7 +53,7 @@ class FirestoreCacheFactory(
     fun <T : Any> infoCache(
         name: String,
         serializer: KSerializer<T>,
-        ttl: Duration = Duration.ofMinutes(5),
+        ttl: Duration = Duration.ofHours(6),
     ): FirestoreCacheService<T> = FirestoreCacheService(
         name = name,
         serializer = serializer,

@@ -1,8 +1,6 @@
 package pl.deniotokiari.tickerwire.services.analytics
 
 import io.kotest.core.spec.style.BehaviorSpec
-import io.kotest.matchers.doubles.shouldBeGreaterThan
-import io.kotest.matchers.doubles.shouldBeLessThanOrEqual
 import io.kotest.matchers.longs.shouldBeGreaterThan
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe

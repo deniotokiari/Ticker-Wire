@@ -1,9 +1,8 @@
 package pl.deniotokiari.tickerwire.common.platform
 
 import android.content.Intent
-import android.net.Uri
-import pl.deniotokiari.tickerwire.common.data.AndroidContextHolder
 import androidx.core.net.toUri
+import pl.deniotokiari.tickerwire.common.data.AndroidContextHolder
 
 actual fun openUrl(url: String) {
     val context = AndroidContextHolder.context

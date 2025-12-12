@@ -10,7 +10,6 @@ import pl.deniotokiari.tickerwire.services.ProviderConfigService
 import pl.deniotokiari.tickerwire.services.analytics.ProviderStatsService
 import pl.deniotokiari.tickerwire.services.cache.FirestoreCacheService
 import java.time.LocalDateTime
-import kotlin.collections.toMutableMap
 
 /**
  * Aggregator for stock data providers
