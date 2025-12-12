@@ -42,7 +42,7 @@ class TickerRepository(
             ttl = 5.toDuration(DurationUnit.MINUTES).inWholeMilliseconds,
         ),
         persistentCache = PersistentCache(
-            ttl = 30.toDuration(DurationUnit.MINUTES).inWholeMilliseconds,
+            ttl = 1.toDuration(DurationUnit.HOURS).inWholeMilliseconds,
             keyValueLocalDataSource = KeyValueLocalDataSource(NAME_NEWS),
             kSerializer = serializer(),
         ),
@@ -61,10 +61,10 @@ class TickerRepository(
         logger = logger,
     )
 
-    suspend fun search(query: String): List<Ticker> {
+    suspend fun search(query: String, ttlSkip: Boolean): List<Ticker> {
         val key = query.trim().lowercase()
 
-        return searchCache.getOrFetch(key = key, ttlSkip = !connectivityRepository.isOnline()) {
+        return searchCache.getOrFetch(key = key, ttlSkip = ttlSkip) {
             tickerRemoteDataSource
                 .search(query)
                 .distinctBy { item -> "${item.ticker}${item.company}" }
@@ -72,13 +72,12 @@ class TickerRepository(
         }
     }
 
-    suspend fun news(tickers: List<Ticker>): List<TickerNews> {
-        val isOnline = connectivityRepository.isOnline()
+    suspend fun news(tickers: List<Ticker>, ttlSkip: Boolean): List<TickerNews> {
         val cached = mutableListOf<TickerNews>()
         val nonCached = mutableMapOf<String, Ticker>()
 
         tickers.forEach { ticker ->
-            val news = newsCache.get(key = ticker.symbol, ttlSkip = !isOnline)
+            val news = newsCache.get(key = ticker.symbol, ttlSkip = ttlSkip)
 
             if (news == null) {
                 nonCached[ticker.symbol] = ticker
@@ -87,7 +86,7 @@ class TickerRepository(
             }
         }
 
-        if (nonCached.isNotEmpty() && isOnline) {
+        if (nonCached.isNotEmpty() && !ttlSkip) {
             tickerRemoteDataSource
                 .news(nonCached.values.toList())
                 .forEach { (symbol, dto) ->
@@ -119,22 +118,14 @@ class TickerRepository(
         return cached
             .distinctBy { item -> item.title }
             .sortedByDescending { item -> item.timestamp }
-            .let { result ->
-                if (result.isEmpty() && !isOnline) {
-                    throw IllegalStateException()
-                } else {
-                    result
-                }
-            }
     }
 
-    suspend fun info(tickers: List<Ticker>): Map<Ticker, TickerData> {
-        val isOnline = connectivityRepository.isOnline()
+    suspend fun info(tickers: List<Ticker>, ttlSkip: Boolean): Map<Ticker, TickerData> {
         val cached = mutableMapOf<Ticker, TickerData>()
         val nonCached = mutableMapOf<String, Ticker>()
 
         tickers.forEach { ticker ->
-            val info = infoCache.get(key = ticker.symbol, ttlSkip = !isOnline)
+            val info = infoCache.get(key = ticker.symbol, ttlSkip = ttlSkip)
 
             if (info == null) {
                 nonCached[ticker.symbol] = ticker
@@ -143,7 +134,7 @@ class TickerRepository(
             }
         }
 
-        if (nonCached.isNotEmpty() && isOnline) {
+        if (nonCached.isNotEmpty() && !ttlSkip) {
             tickerRemoteDataSource
                 .info(nonCached.values.toList())
                 .forEach { (symbol, dto) ->
@@ -165,13 +156,7 @@ class TickerRepository(
                 }
         }
 
-        return cached.let { result ->
-            if (result.isEmpty() && !isOnline) {
-                throw IllegalStateException()
-            } else {
-                result
-            }
-        }
+        return cached
     }
 
     fun refresh() {

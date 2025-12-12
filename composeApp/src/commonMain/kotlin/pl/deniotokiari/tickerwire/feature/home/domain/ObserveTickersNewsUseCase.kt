@@ -1,8 +1,9 @@
 package pl.deniotokiari.tickerwire.feature.home.domain
 
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.flow
 import org.koin.core.annotation.Factory
+import pl.deniotokiari.tickerwire.common.data.ConnectivityRepository
 import pl.deniotokiari.tickerwire.common.data.TickerRepository
 import pl.deniotokiari.tickerwire.model.Ticker
 import pl.deniotokiari.tickerwire.model.TickerNews
@@ -10,9 +11,17 @@ import pl.deniotokiari.tickerwire.model.TickerNews
 @Factory
 class ObserveTickersNewsUseCase(
     private val tickerRepository: TickerRepository,
+    private val connectivityRepository: ConnectivityRepository,
 ) {
-    operator fun invoke(tickers: Flow<List<Ticker>>): Flow<List<TickerNews>> =
-        tickers.map { items ->
-            tickerRepository.news(items)
+    operator fun invoke(tickers: Flow<List<Ticker>>): Flow<List<TickerNews>> = flow {
+        tickers.collect { items ->
+            val cached = tickerRepository.news(items, ttlSkip = true)
+
+            if (cached.isNotEmpty()) {
+                emit(cached)
+            }
+
+            emit(tickerRepository.news(items, ttlSkip = !connectivityRepository.isOnline()))
         }
+    }
 }

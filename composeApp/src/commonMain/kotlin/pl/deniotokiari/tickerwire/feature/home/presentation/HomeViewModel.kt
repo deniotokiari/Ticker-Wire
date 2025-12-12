@@ -26,7 +26,7 @@ import pl.deniotokiari.tickerwire.feature.home.domain.RefreshUseCase
 import pl.deniotokiari.tickerwire.feature.home.domain.RemoveTickerFromWatchlistUseCase
 import pl.deniotokiari.tickerwire.model.Ticker
 
-private const val REFRESH_DELAY = 1_000L
+private const val REFRESH_DELAY = 5_000L
 
 @KoinViewModel
 class HomeViewModel(
