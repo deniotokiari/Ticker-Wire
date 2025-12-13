@@ -3,14 +3,13 @@ package pl.deniotokiari.tickerwire.feature.home.presentation
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import org.koin.android.annotation.KoinViewModel
@@ -19,17 +18,17 @@ import pl.deniotokiari.tickerwire.common.domain.ApplyDarkThemeUseCase
 import pl.deniotokiari.tickerwire.common.domain.ApplyLightThemeUseCase
 import pl.deniotokiari.tickerwire.common.domain.IsDarkThemeUseCase
 import pl.deniotokiari.tickerwire.feature.home.domain.AddTickerToWatchlistUseCase
-import pl.deniotokiari.tickerwire.feature.home.domain.ObserveTickersInfoUseCase
-import pl.deniotokiari.tickerwire.feature.home.domain.ObserveTickersNewsUseCase
-import pl.deniotokiari.tickerwire.feature.home.domain.ObserveVisitedTickerNewsUseCase
+import pl.deniotokiari.tickerwire.feature.home.domain.ClearTickersDataUseCase
+import pl.deniotokiari.tickerwire.feature.home.domain.GetCachedTickerInfoUseCase
+import pl.deniotokiari.tickerwire.feature.home.domain.GetCachedTickerNewsUseCase
+import pl.deniotokiari.tickerwire.feature.home.domain.GetTickerNewsUseCase
+import pl.deniotokiari.tickerwire.feature.home.domain.GetTickersInfoUseCase
+import pl.deniotokiari.tickerwire.feature.home.domain.GetVisitedTickerNewsUseCase
 import pl.deniotokiari.tickerwire.feature.home.domain.ObserveWatchlistItemsUseCase
-import pl.deniotokiari.tickerwire.feature.home.domain.RefreshUseCase
 import pl.deniotokiari.tickerwire.feature.home.domain.RemoveTickerFromWatchlistUseCase
 import pl.deniotokiari.tickerwire.feature.home.domain.SetTickerNewsItemVisitedUseCase
 import pl.deniotokiari.tickerwire.model.Ticker
 import pl.deniotokiari.tickerwire.model.TickerNews
-
-private const val REFRESH_DELAY = 5_000L
 
 @KoinViewModel
 class HomeViewModel(
@@ -38,11 +37,13 @@ class HomeViewModel(
     private val addTickerToWatchlistUseCase: AddTickerToWatchlistUseCase,
     private val applyDarkThemeUseCase: ApplyDarkThemeUseCase,
     private val applyLightThemeUseCase: ApplyLightThemeUseCase,
-    private val observeTickersInfoUseCase: ObserveTickersInfoUseCase,
-    private val observeTickersNewsUseCase: ObserveTickersNewsUseCase,
-    private val observeVisitedTickerNewsUseCase: ObserveVisitedTickerNewsUseCase,
+    private val clearTickersDataUseCase: ClearTickersDataUseCase,
+    private val getCachedTickerInfoUseCase: GetCachedTickerInfoUseCase,
+    private val getCachedTickerNewsUseCase: GetCachedTickerNewsUseCase,
+    private val getTickerNewsUseCase: GetTickerNewsUseCase,
+    private val getTickersInfoUseCase: GetTickersInfoUseCase,
+    private val getVisitedTickerNewsUseCase: GetVisitedTickerNewsUseCase,
     private val observeWatchlistItemsUseCase: ObserveWatchlistItemsUseCase,
-    private val refreshUseCase: RefreshUseCase,
     private val removeTickerFromWatchlistUseCase: RemoveTickerFromWatchlistUseCase,
     private val setTickerNewsItemVisitedUseCase: SetTickerNewsItemVisitedUseCase,
 ) : ViewModel() {
@@ -53,8 +54,7 @@ class HomeViewModel(
     private val _uiEvent = MutableSharedFlow<HomeUiEvent>()
     val uiEvent: SharedFlow<HomeUiEvent> = _uiEvent.asSharedFlow()
 
-    private var infoUpdatesJob: Job? = null
-    private var newsUpdatesJob: Job? = null
+    private var refreshJob: Job? = null
 
     init {
         // Track screen view
@@ -63,20 +63,22 @@ class HomeViewModel(
         viewModelScope.launch {
             observeWatchlistItemsUseCase().collect { items ->
                 _uiState.update { state ->
-                    state.copy(tickers = items)
+                    state.copy(
+                        tickers = items,
+                        info = getCachedTickerInfoUseCase(items),
+                        newsUiState = getCachedTickerNewsUseCase(items).let { news ->
+                            if (news.isEmpty()) {
+                                HomeUiState.NewsUiState.Loading
+                            } else {
+                                HomeUiState.NewsUiState.Content(news)
+                            }
+                        },
+                    )
                 }
+
+                refreshTickersData(items)
             }
         }
-
-        viewModelScope.launch {
-            observeVisitedTickerNewsUseCase().collect { items ->
-                _uiState.update { state ->
-                    state.copy(visitedNews = items)
-                }
-            }
-        }
-
-        subscribeForUpdates()
     }
 
     fun onAction(action: HomeUiAction) {
@@ -101,9 +103,7 @@ class HomeViewModel(
                 )
             }
 
-            delay(REFRESH_DELAY)
-
-            subscribeForUpdates()
+            refreshTickersData(_uiState.value.tickers)
         }
     }
 
@@ -118,64 +118,66 @@ class HomeViewModel(
         analytics.logNewsClicked(item.ticker.symbol, item.url != null)
 
         viewModelScope.launch {
-            setTickerNewsItemVisitedUseCase(item)
+            launch {
+                setTickerNewsItemVisitedUseCase(item)
+                loadVisitedNews(_uiState.value.newsUiState.items)
+            }
 
             item.url?.let { url -> _uiEvent.emit(HomeUiEvent.OpenNewsUri(url)) }
         }
     }
 
-    private fun subscribeForUpdates() {
-        infoUpdatesJob?.cancel()
-        newsUpdatesJob?.cancel()
-
-        infoUpdatesJob = viewModelScope.launch {
-            observeTickersInfoUseCase()
-                .catch {
-                    emit(emptyMap())
-                    _uiState.update { state ->
-                        state.copy(errorUiState = HomeUiState.ErrorUiState.Error)
-                    }
-                }
-                .collect { info ->
-                    _uiState.update { state ->
-                        state.copy(info = info)
-                    }
-                }
+    private suspend fun loadNews(tickers: List<Ticker>): List<TickerNews> {
+        return getTickerNewsUseCase(tickers).also { news ->
+            _uiState.update { state ->
+                state.copy(newsUiState = HomeUiState.NewsUiState.Content(news))
+            }
         }
+    }
 
-        newsUpdatesJob = viewModelScope.launch {
-            observeTickersNewsUseCase()
-                .catch {
-                    emit(emptyList())
-                    _uiState.update { state ->
-                        state.copy(errorUiState = HomeUiState.ErrorUiState.Error)
-                    }
-                }
-                .collect { news ->
-                    _uiState.update { state ->
-                        state.copy(newsUiState = HomeUiState.NewsUiState.Content(news))
-                    }
-                }
+    private suspend fun loadInfo(tickers: List<Ticker>) {
+        _uiState.update { state ->
+            state.copy(info = getTickersInfoUseCase(tickers))
+        }
+    }
+
+    private suspend fun loadVisitedNews(news: List<TickerNews>) {
+        _uiState.update { state ->
+            state.copy(
+                visitedNews = getVisitedTickerNewsUseCase(news),
+            )
+        }
+    }
+
+    private suspend fun refreshTickersData(tickers: List<Ticker>) {
+        if (tickers.isEmpty()) return
+
+        coroutineScope {
+            launch {
+                val news = loadNews(tickers)
+
+                loadVisitedNews(news)
+            }
+
+            launch { loadInfo(tickers) }
         }
     }
 
     private fun handleOnRefresh() {
-        if (_uiState.value.tickers.isEmpty() || _uiState.value.isRefreshing) {
-            return
-        }
+        if (_uiState.value.tickers.isEmpty()) return
+        if (_uiState.value.isRefreshing) return
+        if (refreshJob?.isActive == true) return
 
         // Track refresh event
         analytics.logRefreshTriggered()
 
-        viewModelScope.launch {
+        refreshJob = viewModelScope.launch {
             _uiState.update { state ->
                 state.copy(isRefreshing = true)
             }
 
-            refreshUseCase()
-            subscribeForUpdates()
-
-            delay(REFRESH_DELAY)
+            clearTickersDataUseCase()
+            refreshTickersData(_uiState.value.tickers)
 
             _uiState.update { state ->
                 state.copy(isRefreshing = false)

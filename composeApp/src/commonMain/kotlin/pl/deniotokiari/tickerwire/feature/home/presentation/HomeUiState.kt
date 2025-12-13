@@ -16,6 +16,12 @@ data class HomeUiState(
     sealed interface NewsUiState {
         data object Loading : NewsUiState
         data class Content(val news: List<TickerNews>) : NewsUiState
+
+        val items: List<TickerNews>
+            get() = when (this) {
+                is Content -> news
+                Loading -> emptyList()
+            }
     }
 
     sealed interface ErrorUiState {

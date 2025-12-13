@@ -61,10 +61,12 @@ class TickerRepository(
         logger = logger,
     )
 
-    suspend fun search(query: String, ttlSkip: Boolean): List<Ticker> {
+    private val isOnline: Boolean get() = connectivityRepository.isOnline()
+
+    suspend fun search(query: String): List<Ticker> {
         val key = query.trim().lowercase()
 
-        return searchCache.getOrFetch(key = key, ttlSkip = ttlSkip) {
+        return searchCache.getOrFetch(key = key, ttlSkip = !isOnline) {
             tickerRemoteDataSource
                 .search(query)
                 .distinctBy { item -> "${item.ticker}${item.company}" }
@@ -72,12 +74,20 @@ class TickerRepository(
         }
     }
 
-    suspend fun news(tickers: List<Ticker>, ttlSkip: Boolean): List<TickerNews> {
+    fun cachedNews(tickers: List<Ticker>, ttlSkip: Boolean): List<TickerNews> {
+        return tickers
+            .mapNotNull { ticker -> newsCache.get(key = ticker.symbol, ttlSkip = ttlSkip) }
+            .flatten()
+            .distinctBy { item -> item.title }
+            .sortedByDescending { item -> item.timestamp }
+    }
+
+    suspend fun news(tickers: List<Ticker>): List<TickerNews> {
         val cached = mutableListOf<TickerNews>()
         val nonCached = mutableMapOf<String, Ticker>()
 
         tickers.forEach { ticker ->
-            val news = newsCache.get(key = ticker.symbol, ttlSkip = ttlSkip)
+            val news = newsCache.get(key = ticker.symbol, ttlSkip = !isOnline)
 
             if (news == null) {
                 nonCached[ticker.symbol] = ticker
@@ -86,7 +96,7 @@ class TickerRepository(
             }
         }
 
-        if (nonCached.isNotEmpty() && !ttlSkip) {
+        if (nonCached.isNotEmpty() && isOnline) {
             tickerRemoteDataSource
                 .news(nonCached.values.toList())
                 .forEach { (symbol, dto) ->
@@ -120,12 +130,18 @@ class TickerRepository(
             .sortedByDescending { item -> item.timestamp }
     }
 
-    suspend fun info(tickers: List<Ticker>, ttlSkip: Boolean): Map<Ticker, TickerData> {
+    fun cachedInfo(tickers: List<Ticker>, ttlSkip: Boolean): Map<Ticker, TickerData> {
+        return tickers
+            .mapNotNull { ticker -> infoCache.get(key = ticker.symbol, ttlSkip = ttlSkip) }
+            .associateBy { item -> item.ticker }
+    }
+
+    suspend fun info(tickers: List<Ticker>): Map<Ticker, TickerData> {
         val cached = mutableMapOf<Ticker, TickerData>()
         val nonCached = mutableMapOf<String, Ticker>()
 
         tickers.forEach { ticker ->
-            val info = infoCache.get(key = ticker.symbol, ttlSkip = ttlSkip)
+            val info = infoCache.get(key = ticker.symbol, ttlSkip = !isOnline)
 
             if (info == null) {
                 nonCached[ticker.symbol] = ticker
@@ -134,7 +150,7 @@ class TickerRepository(
             }
         }
 
-        if (nonCached.isNotEmpty() && !ttlSkip) {
+        if (nonCached.isNotEmpty() && isOnline) {
             tickerRemoteDataSource
                 .info(nonCached.values.toList())
                 .forEach { (symbol, dto) ->
@@ -159,8 +175,8 @@ class TickerRepository(
         return cached
     }
 
-    fun refresh() {
-        if (!connectivityRepository.isOnline()) return
+    fun clear() {
+        if (!isOnline) return
 
         searchCache.clear()
         infoCache.clear()
