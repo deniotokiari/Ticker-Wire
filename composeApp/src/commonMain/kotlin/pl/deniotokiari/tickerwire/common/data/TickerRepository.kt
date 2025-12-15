@@ -1,6 +1,7 @@
 package pl.deniotokiari.tickerwire.common.data
 
 import kotlinx.serialization.serializer
+import org.koin.core.annotation.Named
 import org.koin.core.annotation.Single
 import pl.deniotokiari.tickerwire.common.data.cache.MemoryCache
 import pl.deniotokiari.tickerwire.common.data.cache.PersistentCache
@@ -22,45 +23,10 @@ private const val NAME_INFO = "info"
 class TickerRepository(
     private val tickerRemoteDataSource: TickerRemoteDataSource,
     private val connectivityRepository: ConnectivityRepository,
-    private val logger: Logger,
+    @Named(NAME_SEARCH) private val searchCache: TwoLayerCache<List<Ticker>>,
+    @Named(NAME_NEWS) private val newsCache: TwoLayerCache<List<TickerNews>>,
+    @Named(NAME_INFO) private val infoCache: TwoLayerCache<TickerData>,
 ) {
-    private val searchCache = TwoLayerCache<List<Ticker>>(
-        memoryCache = MemoryCache(
-            limit = 10,
-            ttl = 30.toDuration(DurationUnit.MINUTES).inWholeMilliseconds,
-        ),
-        persistentCache = PersistentCache(
-            ttl = 7.toDuration(DurationUnit.DAYS).inWholeMilliseconds,
-            keyValueLocalDataSource = KeyValueLocalDataSource(NAME_SEARCH),
-            kSerializer = serializer(),
-        ),
-        logger = logger,
-    )
-    private val newsCache = TwoLayerCache<List<TickerNews>>(
-        memoryCache = MemoryCache(
-            limit = 50,
-            ttl = 5.toDuration(DurationUnit.MINUTES).inWholeMilliseconds,
-        ),
-        persistentCache = PersistentCache(
-            ttl = 1.toDuration(DurationUnit.HOURS).inWholeMilliseconds,
-            keyValueLocalDataSource = KeyValueLocalDataSource(NAME_NEWS),
-            kSerializer = serializer(),
-        ),
-        logger = logger,
-    )
-    private val infoCache = TwoLayerCache<TickerData>(
-        memoryCache = MemoryCache(
-            limit = 10,
-            ttl = 15.toDuration(DurationUnit.MINUTES).inWholeMilliseconds,
-        ),
-        persistentCache = PersistentCache(
-            ttl = 1.toDuration(DurationUnit.DAYS).inWholeMilliseconds,
-            keyValueLocalDataSource = KeyValueLocalDataSource(NAME_INFO),
-            kSerializer = serializer(),
-        ),
-        logger = logger,
-    )
-
     private val isOnline: Boolean get() = connectivityRepository.isOnline()
 
     suspend fun search(query: String): List<Ticker> {
@@ -183,3 +149,48 @@ class TickerRepository(
         newsCache.clear()
     }
 }
+
+@Named(NAME_SEARCH)
+@Single
+fun providerSearchCache(logger: Logger) = TwoLayerCache<List<Ticker>>(
+    memoryCache = MemoryCache(
+        limit = 10,
+        ttl = 30.toDuration(DurationUnit.MINUTES).inWholeMilliseconds,
+    ),
+    persistentCache = PersistentCache(
+        ttl = 7.toDuration(DurationUnit.DAYS).inWholeMilliseconds,
+        keyValueLocalDataSource = KeyValueLocalDataSource(NAME_SEARCH),
+        kSerializer = serializer(),
+    ),
+    logger = logger,
+)
+
+@Named(NAME_NEWS)
+@Single
+fun provideNewsCache(logger: Logger) = TwoLayerCache<List<TickerNews>>(
+    memoryCache = MemoryCache(
+        limit = 50,
+        ttl = 5.toDuration(DurationUnit.MINUTES).inWholeMilliseconds,
+    ),
+    persistentCache = PersistentCache(
+        ttl = 1.toDuration(DurationUnit.HOURS).inWholeMilliseconds,
+        keyValueLocalDataSource = KeyValueLocalDataSource(NAME_NEWS),
+        kSerializer = serializer(),
+    ),
+    logger = logger,
+)
+
+@Named(NAME_INFO)
+@Single
+fun provideInfoCache(logger: Logger) = TwoLayerCache<TickerData>(
+    memoryCache = MemoryCache(
+        limit = 10,
+        ttl = 15.toDuration(DurationUnit.MINUTES).inWholeMilliseconds,
+    ),
+    persistentCache = PersistentCache(
+        ttl = 1.toDuration(DurationUnit.DAYS).inWholeMilliseconds,
+        keyValueLocalDataSource = KeyValueLocalDataSource(NAME_INFO),
+        kSerializer = serializer(),
+    ),
+    logger = logger,
+)
