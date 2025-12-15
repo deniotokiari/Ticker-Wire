@@ -66,6 +66,7 @@ class HomeViewModel(
                     state.copy(
                         tickers = items,
                         info = getCachedTickerInfoUseCase(items),
+                        isRefreshing = true,
                         newsUiState = getCachedTickerNewsUseCase(items).let { news ->
                             if (news.isEmpty()) {
                                 HomeUiState.NewsUiState.Loading
@@ -77,6 +78,8 @@ class HomeViewModel(
                 }
 
                 refreshTickersData(items)
+
+                _uiState.update { state -> state.copy(isRefreshing = false) }
             }
         }
     }
