@@ -34,6 +34,7 @@ private val DarkColorScheme = darkColorScheme(
     error = DarkError,
 )
 
+@Suppress("ModifierRequired", "MultipleContentEmitters")
 @Composable
 fun AppTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),

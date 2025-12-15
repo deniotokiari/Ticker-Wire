@@ -3,12 +3,12 @@ package pl.deniotokiari.tickerwire.feature.app.presentation
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import org.jetbrains.compose.ui.tooling.preview.Preview
 import org.koin.compose.KoinApplication
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.ksp.generated.startKoin
@@ -18,25 +18,31 @@ import pl.deniotokiari.tickerwire.feature.search.presentation.SearchScreen
 import pl.deniotokiari.tickerwire.navigation.Route
 import pl.deniotokiari.tickerwire.theme.AppTheme
 
+@Suppress("ModifierRequired")
 @Composable
-@Preview
 fun App() {
     KoinApplication(application = { AppKoinApplication.startKoin() }) {
-        val viewModel: AppViewModel = koinViewModel()
-        val uiState by viewModel.uiState.collectAsState()
+        AppScreen()
+    }
+}
 
-        AppTheme(darkTheme = uiState.isDarkTheme) {
-            val navController = rememberNavController()
+@Composable
+private fun AppScreen(
+    viewModel: AppViewModel = koinViewModel(),
+) {
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-            NavHost(
-                navController = navController,
-                startDestination = Route.Home,
-                enterTransition = { EnterTransition.None },
-                exitTransition = { ExitTransition.None },
-            ) {
-                composable<Route.Home> { HomeScreen(navController) }
-                composable<Route.Search> { SearchScreen(navController) }
-            }
+    AppTheme(darkTheme = uiState.isDarkTheme) {
+        val navController = rememberNavController()
+
+        NavHost(
+            navController = navController,
+            startDestination = Route.Home,
+            enterTransition = { EnterTransition.None },
+            exitTransition = { ExitTransition.None },
+        ) {
+            composable<Route.Home> { HomeScreen(navController) }
+            composable<Route.Search> { SearchScreen(navController) }
         }
     }
 }

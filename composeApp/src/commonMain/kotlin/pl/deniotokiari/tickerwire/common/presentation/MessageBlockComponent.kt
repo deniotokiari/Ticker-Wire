@@ -24,10 +24,10 @@ import pl.deniotokiari.tickerwire.theme.Spacing
 
 @Composable
 fun MessageBlockComponent(
-    modifier: Modifier = Modifier,
     icon: ImageVector,
     title: String,
     description: String,
+    modifier: Modifier = Modifier,
 ) {
     Column(
         modifier = modifier

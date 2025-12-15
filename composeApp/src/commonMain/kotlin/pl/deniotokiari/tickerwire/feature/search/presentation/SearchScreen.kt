@@ -32,7 +32,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -43,6 +42,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import kotlinx.serialization.serializer
 import org.jetbrains.compose.resources.stringResource
@@ -63,6 +63,7 @@ import tickerwire.composeapp.generated.resources.search_no_results_message
 import tickerwire.composeapp.generated.resources.search_no_results_title
 import tickerwire.composeapp.generated.resources.search_placeholder
 
+@Suppress("EffectKeys", "ModifierRequired")
 @Composable
 fun SearchScreen(
     navController: NavController,
@@ -83,7 +84,7 @@ fun SearchScreen(
         }
     }
 
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     SearchContent(
         uiState = uiState,
@@ -109,8 +110,9 @@ internal fun SearchContent(
             ) {
                 Icon(
                     modifier = Modifier
-                        .padding(end = Spacing.sm)
-                        .clickable { onAction(SearchUiAction.OnBackClicked) },
+                        .clickable { onAction(SearchUiAction.OnBackClicked) }
+                        .padding(vertical = Spacing.xs)
+                        .padding(end = Spacing.sm),
                     imageVector = Icons.Default.ArrowBackIosNew,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onSurface,
@@ -228,8 +230,8 @@ private fun Empty(uiState: SearchUiState.Empty) {
 
 @Composable
 private fun Error(
-    modifier: Modifier,
     onAction: (SearchUiAction) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     SnackMessageComponent(
         modifier = modifier,

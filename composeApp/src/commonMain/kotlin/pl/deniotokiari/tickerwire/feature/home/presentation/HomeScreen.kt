@@ -38,7 +38,6 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults.Indicator
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -47,6 +46,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import kotlinx.serialization.serializer
 import org.jetbrains.compose.resources.stringResource
@@ -80,6 +80,7 @@ private const val KEY_MY_WATCH_LIST_CONTENT = "KEY_MY_WATCH_LIST_CONTENT"
 private const val KEY_NEWS_HEADER = "KEY_NEWS_HEADER"
 private const val KEY_NEWS_CONTENT = "KEY_NEWS_CONTENT"
 
+@Suppress("ModifierRequired", "EffectKeys")
 @Composable
 fun HomeScreen(
     navController: NavController,
@@ -102,7 +103,7 @@ fun HomeScreen(
         }
     }
 
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     HomeContent(
         uiState = uiState,
