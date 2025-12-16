@@ -15,10 +15,10 @@ data class HomeUiState(
     val visitedNews: Set<TickerNews> = emptySet(),
 ) {
     val filteredNews: List<TickerNews>
-        get() = newsUiState.items.filter { item ->
-            if (selectedTickers.isEmpty()) {
-                true
-            } else {
+        get() = if (selectedTickers.isEmpty()) {
+            newsUiState.items
+        } else {
+            newsUiState.items.filter { item ->
                 selectedTickers.contains(item.ticker)
             }
         }
