@@ -4,10 +4,10 @@ import org.koin.core.annotation.Factory
 import pl.deniotokiari.tickerwire.common.data.TickerRepository
 
 @Factory
-class RefreshUseCase(
+class ClearTickersDataUseCase(
     private val tickerRepository: TickerRepository,
 ) {
-    suspend operator fun invoke() {
-        tickerRepository.refresh()
+    operator fun invoke() {
+        tickerRepository.clear()
     }
 }

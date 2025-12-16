@@ -31,11 +31,11 @@ import pl.deniotokiari.tickerwire.theme.ValueNegative
 
 @Composable
 fun SnackMessageComponent(
-    modifier: Modifier = Modifier,
     message: String,
     onCloseClick: () -> Unit,
+    modifier: Modifier = Modifier,
     action: String? = null,
-    onActionClick: () -> Unit = {},
+    onActionClick: () -> Unit = {}
 ) {
     Box(
         modifier = modifier
@@ -63,9 +63,7 @@ fun SnackMessageComponent(
 
             action?.let { action ->
                 Text(
-                    modifier = Modifier
-                        .padding(start = Spacing.xs)
-                        .clickable { onActionClick() },
+                    modifier = Modifier.clickable { onActionClick() }.padding(start = Spacing.xs),
                     style = MaterialTheme.typography.bodySmall
                         .copy(
                             fontWeight = FontWeight.SemiBold,

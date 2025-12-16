@@ -17,7 +17,12 @@ class TwoLayerCache<T>(
         }
 
         persistentCache.get(key, ttlSkip)?.let { result ->
-            memoryCache.put(key, result, ttlSkip)
+            // Only put into memory cache if ttlSkip is false (respecting TTL)
+            // If ttlSkip is true, we're returning expired data and shouldn't refresh its timestamp
+            // by putting it into memory cache with a fresh timestamp
+            if (!ttlSkip) {
+                memoryCache.put(key, result, ttlSkip)
+            }
 
             logger.d(LOGGER_TAG, "L2: $key, ttlSkip: $ttlSkip")
 
@@ -47,7 +52,12 @@ class TwoLayerCache<T>(
         }
 
         persistentCache.get(key, ttlSkip)?.let { result ->
-            memoryCache.put(key, result, ttlSkip)
+            // Only put into memory cache if ttlSkip is false (respecting TTL)
+            // If ttlSkip is true, we're returning expired data and shouldn't refresh its timestamp
+            // by putting it into memory cache with a fresh timestamp
+            if (!ttlSkip) {
+                memoryCache.put(key, result, ttlSkip)
+            }
 
             logger.d(LOGGER_TAG, "L2: $key, ttlSkip: $ttlSkip")
 

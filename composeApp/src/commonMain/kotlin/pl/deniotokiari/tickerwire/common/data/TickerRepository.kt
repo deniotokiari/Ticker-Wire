@@ -1,6 +1,7 @@
 package pl.deniotokiari.tickerwire.common.data
 
 import kotlinx.serialization.serializer
+import org.koin.core.annotation.Named
 import org.koin.core.annotation.Single
 import pl.deniotokiari.tickerwire.common.data.cache.MemoryCache
 import pl.deniotokiari.tickerwire.common.data.cache.PersistentCache
@@ -11,6 +12,7 @@ import pl.deniotokiari.tickerwire.common.etc.Logger
 import pl.deniotokiari.tickerwire.model.Ticker
 import pl.deniotokiari.tickerwire.model.TickerData
 import pl.deniotokiari.tickerwire.model.TickerNews
+import kotlin.math.roundToLong
 import kotlin.time.DurationUnit
 import kotlin.time.toDuration
 
@@ -22,49 +24,20 @@ private const val NAME_INFO = "info"
 class TickerRepository(
     private val tickerRemoteDataSource: TickerRemoteDataSource,
     private val connectivityRepository: ConnectivityRepository,
-    private val logger: Logger,
+    @Named(NAME_SEARCH) private val searchCache: Lazy<TwoLayerCache<List<Ticker>>>,
+    @Named(NAME_NEWS) private val newsCache: Lazy<TwoLayerCache<List<TickerNews>>>,
+    @Named(NAME_INFO) private val infoCache: Lazy<TwoLayerCache<TickerData>>,
 ) {
-    private val searchCache = TwoLayerCache<List<Ticker>>(
-        memoryCache = MemoryCache(
-            limit = 10,
-            ttl = 30.toDuration(DurationUnit.MINUTES).inWholeMilliseconds,
-        ),
-        persistentCache = PersistentCache(
-            ttl = 7.toDuration(DurationUnit.DAYS).inWholeMilliseconds,
-            keyValueLocalDataSource = KeyValueLocalDataSource(NAME_SEARCH),
-            kSerializer = serializer(),
-        ),
-        logger = logger,
-    )
-    private val newsCache = TwoLayerCache<List<TickerNews>>(
-        memoryCache = MemoryCache(
-            limit = 50,
-            ttl = 5.toDuration(DurationUnit.MINUTES).inWholeMilliseconds,
-        ),
-        persistentCache = PersistentCache(
-            ttl = 1.toDuration(DurationUnit.HOURS).inWholeMilliseconds,
-            keyValueLocalDataSource = KeyValueLocalDataSource(NAME_NEWS),
-            kSerializer = serializer(),
-        ),
-        logger = logger,
-    )
-    private val infoCache = TwoLayerCache<TickerData>(
-        memoryCache = MemoryCache(
-            limit = 10,
-            ttl = 15.toDuration(DurationUnit.MINUTES).inWholeMilliseconds,
-        ),
-        persistentCache = PersistentCache(
-            ttl = 1.toDuration(DurationUnit.DAYS).inWholeMilliseconds,
-            keyValueLocalDataSource = KeyValueLocalDataSource(NAME_INFO),
-            kSerializer = serializer(),
-        ),
-        logger = logger,
-    )
+    private val isOnline: Boolean get() = connectivityRepository.isOnline()
 
-    suspend fun search(query: String, ttlSkip: Boolean): List<Ticker> {
+    private val _searchCache by searchCache
+    private val _newsCache by newsCache
+    private val _infoCache by infoCache
+
+    suspend fun search(query: String): List<Ticker> {
         val key = query.trim().lowercase()
 
-        return searchCache.getOrFetch(key = key, ttlSkip = ttlSkip) {
+        return _searchCache.getOrFetch(key = key, ttlSkip = !isOnline) {
             tickerRemoteDataSource
                 .search(query)
                 .distinctBy { item -> "${item.ticker}${item.company}" }
@@ -72,12 +45,20 @@ class TickerRepository(
         }
     }
 
-    suspend fun news(tickers: List<Ticker>, ttlSkip: Boolean): List<TickerNews> {
+    fun cachedNews(tickers: List<Ticker>, ttlSkip: Boolean): List<TickerNews> {
+        return tickers
+            .mapNotNull { ticker -> _newsCache.get(key = ticker.symbol, ttlSkip = ttlSkip) }
+            .flatten()
+            .distinctBy { item -> item.title }
+            .sortedByDescending { item -> item.timestamp }
+    }
+
+    suspend fun news(tickers: List<Ticker>): List<TickerNews> {
         val cached = mutableListOf<TickerNews>()
         val nonCached = mutableMapOf<String, Ticker>()
 
         tickers.forEach { ticker ->
-            val news = newsCache.get(key = ticker.symbol, ttlSkip = ttlSkip)
+            val news = _newsCache.get(key = ticker.symbol, ttlSkip = !isOnline)
 
             if (news == null) {
                 nonCached[ticker.symbol] = ticker
@@ -86,7 +67,7 @@ class TickerRepository(
             }
         }
 
-        if (nonCached.isNotEmpty() && !ttlSkip) {
+        if (nonCached.isNotEmpty() && isOnline) {
             tickerRemoteDataSource
                 .news(nonCached.values.toList())
                 .forEach { (symbol, dto) ->
@@ -108,7 +89,7 @@ class TickerRepository(
                             .sortedByDescending { item -> item.timestamp }
                             .take(5)
 
-                        newsCache.put(key = symbol, data = news)
+                        _newsCache.put(key = symbol, data = news)
 
                         cached.addAll(news)
                     }
@@ -120,12 +101,18 @@ class TickerRepository(
             .sortedByDescending { item -> item.timestamp }
     }
 
-    suspend fun info(tickers: List<Ticker>, ttlSkip: Boolean): Map<Ticker, TickerData> {
+    fun cachedInfo(tickers: List<Ticker>, ttlSkip: Boolean): Map<Ticker, TickerData> {
+        return tickers
+            .mapNotNull { ticker -> _infoCache.get(key = ticker.symbol, ttlSkip = ttlSkip) }
+            .associateBy { item -> item.ticker }
+    }
+
+    suspend fun info(tickers: List<Ticker>): Map<Ticker, TickerData> {
         val cached = mutableMapOf<Ticker, TickerData>()
         val nonCached = mutableMapOf<String, Ticker>()
 
         tickers.forEach { ticker ->
-            val info = infoCache.get(key = ticker.symbol, ttlSkip = ttlSkip)
+            val info = _infoCache.get(key = ticker.symbol, ttlSkip = !isOnline)
 
             if (info == null) {
                 nonCached[ticker.symbol] = ticker
@@ -134,7 +121,7 @@ class TickerRepository(
             }
         }
 
-        if (nonCached.isNotEmpty() && !ttlSkip) {
+        if (nonCached.isNotEmpty() && isOnline) {
             tickerRemoteDataSource
                 .info(nonCached.values.toList())
                 .forEach { (symbol, dto) ->
@@ -149,7 +136,7 @@ class TickerRepository(
                             currency = dto.currency,
                         )
 
-                        infoCache.put(key = symbol, data = info)
+                        _infoCache.put(key = symbol, data = info)
 
                         cached[ticker] = info
                     }
@@ -159,11 +146,82 @@ class TickerRepository(
         return cached
     }
 
-    fun refresh() {
-        if (!connectivityRepository.isOnline()) return
+    fun clear() {
+        if (!isOnline) return
 
-        searchCache.clear()
-        infoCache.clear()
-        newsCache.clear()
+        _searchCache.clear()
+        _infoCache.clear()
+        _newsCache.clear()
     }
+}
+
+private const val LIMIT_SEARCH = 10
+private const val LIMIT_NEWS = 100
+private const val LIMIT_INFO = 10
+private const val TTL_MEMORY = 0.4
+
+@Named(NAME_SEARCH)
+@Single
+fun providerSearchCache(
+    logger: Logger,
+    appSettingsRepository: AppSettingsRepository,
+): TwoLayerCache<List<Ticker>> {
+    val ttl = appSettingsRepository.ttlConfig.searchTtlMs
+
+    return TwoLayerCache(
+        memoryCache = MemoryCache(
+            limit = LIMIT_SEARCH,
+            ttl = (ttl * TTL_MEMORY).roundToLong(),
+        ),
+        persistentCache = PersistentCache(
+            ttl = ttl,
+            keyValueLocalDataSource = KeyValueLocalDataSource(NAME_SEARCH),
+            kSerializer = serializer(),
+        ),
+        logger = logger,
+    )
+}
+
+@Named(NAME_NEWS)
+@Single
+fun provideNewsCache(
+    logger: Logger,
+    appSettingsRepository: AppSettingsRepository,
+): TwoLayerCache<List<TickerNews>> {
+    val ttl = appSettingsRepository.ttlConfig.newsTtlMs
+
+    return TwoLayerCache(
+        memoryCache = MemoryCache(
+            limit = LIMIT_NEWS,
+            ttl = (ttl * TTL_MEMORY).roundToLong(),
+        ),
+        persistentCache = PersistentCache(
+            ttl = ttl,
+            keyValueLocalDataSource = KeyValueLocalDataSource(NAME_NEWS),
+            kSerializer = serializer(),
+        ),
+        logger = logger,
+    )
+}
+
+@Named(NAME_INFO)
+@Single
+fun provideInfoCache(
+    logger: Logger,
+    appSettingsRepository: AppSettingsRepository,
+): TwoLayerCache<TickerData> {
+    val ttl = appSettingsRepository.ttlConfig.infoTtlMs
+
+    return TwoLayerCache(
+        memoryCache = MemoryCache(
+            limit = LIMIT_INFO,
+            ttl = (ttl * TTL_MEMORY).roundToLong(),
+        ),
+        persistentCache = PersistentCache(
+            ttl = ttl,
+            keyValueLocalDataSource = KeyValueLocalDataSource(NAME_INFO),
+            kSerializer = serializer(),
+        ),
+        logger = logger,
+    )
 }

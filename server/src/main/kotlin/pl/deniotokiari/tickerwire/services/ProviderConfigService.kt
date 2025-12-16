@@ -4,12 +4,13 @@ import kotlinx.serialization.serializer
 import pl.deniotokiari.tickerwire.models.Provider
 import pl.deniotokiari.tickerwire.models.ProviderConfig
 
+private const val PROVIDERS = "providers"
+
 class ProviderConfigService(
     private val firebaseRemoteConfigService: FirebaseRemoteConfigService,
 ) {
     private val _configs = mutableMapOf<Provider, ProviderConfig>()
-    val configs: Map<Provider, ProviderConfig>
-        get() = _configs
+    val configs: Map<Provider, ProviderConfig> get() = _configs
 
     init {
         refresh()
@@ -18,7 +19,7 @@ class ProviderConfigService(
     fun refresh() {
         val result = firebaseRemoteConfigService
             .get(
-                key = "providers",
+                key = PROVIDERS,
                 kSerializer = serializer<Map<String, ProviderConfig>>(),
             )
             ?: return
@@ -38,7 +39,7 @@ class ProviderConfigService(
         _configs[provider] = config
 
         firebaseRemoteConfigService.set(
-            key = "providers",
+            key = PROVIDERS,
             value = _configs.mapKeys { (key, _) -> key.name },
             kSerializer = serializer<Map<String, ProviderConfig>>(),
         )
@@ -48,7 +49,7 @@ class ProviderConfigService(
         _configs[provider] = config
 
         firebaseRemoteConfigService.setAsync(
-            key = "providers",
+            key = PROVIDERS,
             value = _configs.mapKeys { (key, _) -> key.name },
             kSerializer = serializer<Map<String, ProviderConfig>>(),
         )

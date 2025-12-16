@@ -10,13 +10,21 @@ import kotlinx.coroutines.launch
 import org.koin.android.annotation.KoinViewModel
 import pl.deniotokiari.tickerwire.common.domain.IsDarkThemeUseCase
 import pl.deniotokiari.tickerwire.common.domain.ObserveIsDarkThemeUseCase
+import pl.deniotokiari.tickerwire.feature.app.domain.RefreshTtlConfigUseCase
+import pl.deniotokiari.tickerwire.navigation.Route
 
 @KoinViewModel
 class AppViewModel(
     private val observeIsDarkThemeUseCase: ObserveIsDarkThemeUseCase,
     isDarkThemeUseCase: IsDarkThemeUseCase,
+    refreshTtlConfigUseCase: RefreshTtlConfigUseCase,
 ) : ViewModel() {
-    private val _uiState = MutableStateFlow(AppUiState(isDarkTheme = isDarkThemeUseCase()))
+    private val _uiState = MutableStateFlow(
+        AppUiState(
+            isDarkTheme = isDarkThemeUseCase(),
+            startDestination = null,
+        )
+    )
     val uiState: StateFlow<AppUiState> = _uiState.asStateFlow()
 
     init {
@@ -25,6 +33,14 @@ class AppViewModel(
                 _uiState.update { state ->
                     state.copy(isDarkTheme = isDarkTheme)
                 }
+            }
+        }
+
+        viewModelScope.launch {
+            refreshTtlConfigUseCase()
+
+            _uiState.update { state ->
+                state.copy(startDestination = Route.Home)
             }
         }
     }

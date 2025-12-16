@@ -58,7 +58,11 @@ class TwoLayerCacheTest {
             }
 
             persistentCache.get(key, ttlSkip)?.let { result ->
-                memoryCache.put(key, result, ttlSkip)
+                // Only put into memory cache if ttlSkip is false (respecting TTL)
+                // If ttlSkip is true, we're returning expired data and shouldn't refresh its timestamp
+                if (!ttlSkip) {
+                    memoryCache.put(key, result, ttlSkip)
+                }
                 logger.d("TwoLayerCache", "L2: $key, ttlSkip: $ttlSkip")
                 return result
             }
@@ -83,7 +87,11 @@ class TwoLayerCacheTest {
             }
 
             persistentCache.get(key, ttlSkip)?.let { result ->
-                memoryCache.put(key, result, ttlSkip)
+                // Only put into memory cache if ttlSkip is false (respecting TTL)
+                // If ttlSkip is true, we're returning expired data and shouldn't refresh its timestamp
+                if (!ttlSkip) {
+                    memoryCache.put(key, result, ttlSkip)
+                }
                 logger.d("TwoLayerCache", "L2: $key, ttlSkip: $ttlSkip")
                 return result
             }
@@ -208,7 +216,22 @@ class TwoLayerCacheTest {
         val result = cache.get("key1", false)
 
         assertEquals("persistent_value", result)
-        assertEquals("persistent_value", memoryCache.get("key1", false)) // Promoted to memory
+        assertEquals("persistent_value", memoryCache.get("key1", false)) // Promoted to memory when ttlSkip = false
+    }
+
+    @Test
+    fun getWithTtlSkipTrueDoesNotPromoteToMemoryCache() {
+        val memoryCache = FakeMemoryCache<String>()
+        val persistentCache = FakePersistentCache<String>()
+        val logger = FakeLogger()
+        val cache = TestableTwoLayerCache(memoryCache, persistentCache, logger)
+
+        persistentCache.put("key1", "persistent_value", false)
+
+        val result = cache.get("key1", true)
+
+        assertEquals("persistent_value", result)
+        assertNull(memoryCache.get("key1", false)) // Should NOT be promoted when ttlSkip = true
     }
 
     @Test

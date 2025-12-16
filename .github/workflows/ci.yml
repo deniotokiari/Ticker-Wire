@@ -367,7 +367,7 @@ jobs:
           echo "api.uri=$API_URI" >> local.properties
 
       - name: Run Compose App Tests
-        run: ./gradlew :composeApp:allTests --build-cache --configuration-cache
+        run: ./gradlew :composeApp:test
 
       - name: Upload test results
         if: always()
