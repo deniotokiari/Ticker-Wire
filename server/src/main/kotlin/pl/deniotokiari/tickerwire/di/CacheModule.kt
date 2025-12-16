@@ -6,9 +6,11 @@ import org.koin.dsl.module
 import pl.deniotokiari.tickerwire.model.dto.TickerDto
 import pl.deniotokiari.tickerwire.model.dto.TickerInfoDto
 import pl.deniotokiari.tickerwire.model.dto.TickerNewsDto
+import pl.deniotokiari.tickerwire.services.TtlConfigService
 import pl.deniotokiari.tickerwire.services.cache.CacheCleanupScheduler
 import pl.deniotokiari.tickerwire.services.cache.FirestoreCacheFactory
 import pl.deniotokiari.tickerwire.services.cache.FirestoreCacheService
+import java.time.Duration
 
 /**
  * Cache qualifiers for dependency injection
@@ -26,10 +28,12 @@ object CacheQualifiers {
 val cacheModule = module {
     // Search cache
     single<FirestoreCacheService<List<TickerDto>>>(CacheQualifiers.SEARCH_CACHE) {
+        val ttlConfig = get<TtlConfigService>().ttlConfig.server
         val cacheFactory = get<FirestoreCacheFactory>()
         val cache = cacheFactory.searchCache(
             name = "search_cache",
             serializer = ListSerializer(TickerDto.serializer()),
+            ttl = Duration.ofMillis(ttlConfig.searchTtlMs),
         )
         // Register with cleanup scheduler
         get<CacheCleanupScheduler>().register("search_cache", cache)
@@ -38,10 +42,12 @@ val cacheModule = module {
 
     // News cache
     single<FirestoreCacheService<List<TickerNewsDto>>>(CacheQualifiers.NEWS_CACHE) {
+        val ttlConfig = get<TtlConfigService>().ttlConfig.server
         val cacheFactory = get<FirestoreCacheFactory>()
         val cache = cacheFactory.newsCache(
             name = "news_cache",
             serializer = ListSerializer(TickerNewsDto.serializer()),
+            ttl = Duration.ofMillis(ttlConfig.newsTtlMs),
         )
         // Register with cleanup scheduler
         get<CacheCleanupScheduler>().register("news_cache", cache)
@@ -50,10 +56,12 @@ val cacheModule = module {
 
     // Info cache
     single<FirestoreCacheService<TickerInfoDto>>(CacheQualifiers.INFO_CACHE) {
+        val ttlConfig = get<TtlConfigService>().ttlConfig.server
         val cacheFactory = get<FirestoreCacheFactory>()
         val cache = cacheFactory.infoCache(
             name = "info_cache",
             serializer = TickerInfoDto.serializer(),
+            ttl = Duration.ofMillis(ttlConfig.infoTtlMs),
         )
         // Register with cleanup scheduler
         get<CacheCleanupScheduler>().register("info_cache", cache)

@@ -2,8 +2,12 @@ package pl.deniotokiari.tickerwire.feature.app.presentation
 
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -32,16 +36,25 @@ private fun AppScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     AppTheme(darkTheme = uiState.isDarkTheme) {
-        val navController = rememberNavController()
+        val startDestination = uiState.startDestination
 
-        NavHost(
-            navController = navController,
-            startDestination = Route.Home,
-            enterTransition = { EnterTransition.None },
-            exitTransition = { ExitTransition.None },
-        ) {
-            composable<Route.Home> { HomeScreen(navController) }
-            composable<Route.Search> { SearchScreen(navController) }
+        if (startDestination == null) {
+            CircularProgressIndicator(
+                modifier = Modifier.align(Alignment.Center),
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+        } else {
+            val navController = rememberNavController()
+
+            NavHost(
+                navController = navController,
+                startDestination = startDestination,
+                enterTransition = { EnterTransition.None },
+                exitTransition = { ExitTransition.None },
+            ) {
+                composable<Route.Home> { HomeScreen(navController) }
+                composable<Route.Search> { SearchScreen(navController) }
+            }
         }
     }
 }
