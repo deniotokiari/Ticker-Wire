@@ -36,8 +36,13 @@ class AppSettingsRepository(
     private val _isDarkTheme = MutableStateFlow(appSettingsLocalDataStore.isDarkTheme())
     val isDarkTheme: StateFlow<Boolean> = _isDarkTheme.asStateFlow()
 
-    private var _ttlConfig: TtlConfig? = null
-    val ttlConfig: TtlConfig get() = requireNotNull(_ttlConfig)
+    // Initialize with default values immediately so cache providers can access it during Koin initialization
+    private var _ttlConfig: TtlConfig = TtlConfig(
+        searchTtlMs = 7200000L,  // 2 hours (default, will be refreshed from server)
+        newsTtlMs = 7200000L,    // 2 hours (default, will be refreshed from server)
+        infoTtlMs = 43200000L,   // 12 hours (default, will be refreshed from server)
+    )
+    val ttlConfig: TtlConfig get() = _ttlConfig
 
     fun applyDefaultTtlConfig() {
         _ttlConfig = TtlConfig(
