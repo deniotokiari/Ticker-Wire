@@ -71,6 +71,8 @@ class HomeViewModel(
                             if (news.isEmpty()) {
                                 HomeUiState.NewsUiState.Loading
                             } else {
+                                loadVisitedNews(news)
+
                                 HomeUiState.NewsUiState.Content(news)
                             }
                         },
@@ -94,6 +96,19 @@ class HomeViewModel(
             is HomeUiAction.OnNewsClick -> handleOnNewsClick(action.item)
             HomeUiAction.OnErrorMessageActionClick -> handleOnErrorMessageActionClick()
             HomeUiAction.OnErrorMessageClose -> handleOnErrorMessageClose()
+            is HomeUiAction.OnTickerClick -> handleOnTickerClick(action)
+        }
+    }
+
+    private fun handleOnTickerClick(action: HomeUiAction.OnTickerClick) {
+        _uiState.update { state ->
+            state.copy(
+                selectedTickers = if (state.selectedTickers.contains(action.item)) {
+                    state.selectedTickers - action.item
+                } else {
+                    state.selectedTickers + action.item
+                },
+            )
         }
     }
 
@@ -203,6 +218,12 @@ class HomeViewModel(
 
         viewModelScope.launch {
             removeTickerFromWatchlistUseCase(ticker)
+
+            _uiState.update { state ->
+                state.copy(
+                    selectedTickers = state.selectedTickers - ticker,
+                )
+            }
         }
     }
 

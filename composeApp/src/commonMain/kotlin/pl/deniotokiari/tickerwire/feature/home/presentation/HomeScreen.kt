@@ -157,8 +157,7 @@ private fun HomeContent(
             }
 
             watchListContent(
-                tickers = uiState.tickers,
-                info = uiState.info,
+                state = uiState,
                 onAction = onAction,
             )
 
@@ -175,7 +174,7 @@ private fun HomeContent(
             }
 
             newsContent(
-                newsUiState = uiState.newsUiState,
+                uiState = uiState,
                 visitedNews = uiState.visitedNews,
                 onAction = onAction,
             )
@@ -198,10 +197,11 @@ private fun HomeContent(
 }
 
 private fun LazyListScope.watchListContent(
-    tickers: List<Ticker>,
-    info: Map<Ticker, TickerData>,
+    state: HomeUiState,
     onAction: (HomeUiAction) -> Unit,
 ) {
+    val tickers = state.tickers
+
     if (tickers.isEmpty()) {
         item(key = KEY_MY_WATCH_LIST_CONTENT) {
             MessageBlockComponent(
@@ -212,6 +212,8 @@ private fun LazyListScope.watchListContent(
             )
         }
     } else {
+        val info = state.info
+
         item(key = KEY_MY_WATCH_LIST_CONTENT) {
             LazyRow(
                 modifier = Modifier
@@ -221,7 +223,10 @@ private fun LazyListScope.watchListContent(
                 horizontalArrangement = Arrangement.spacedBy(Spacing.xs + Spacing.sm),
             ) {
                 items(tickers, key = { item -> item.symbol }) { item ->
-                    Box {
+                    Box(
+                        modifier = Modifier
+                            .clickable { onAction(HomeUiAction.OnTickerClick(item)) },
+                    ) {
                         Column(
                             modifier = Modifier
                                 .width(Spacing.xxl * 3)
@@ -229,7 +234,13 @@ private fun LazyListScope.watchListContent(
                                     elevation = Spacing.xxxs,
                                     shape = RoundedCornerShape(Spacing.sm),
                                 )
-                                .background(color = MaterialTheme.colorScheme.surface)
+                                .background(
+                                    color = if (state.selectedTickers.contains(item)) {
+                                        MaterialTheme.colorScheme.surfaceDim
+                                    } else {
+                                        MaterialTheme.colorScheme.surface
+                                    }
+                                )
                                 .padding(Spacing.md),
                         ) {
                             Text(
@@ -311,12 +322,14 @@ private fun LazyListScope.watchListContent(
 
 private fun LazyListScope.newsContent(
     visitedNews: Set<TickerNews>,
-    newsUiState: HomeUiState.NewsUiState,
+    uiState: HomeUiState,
     onAction: (HomeUiAction) -> Unit
 ) {
+    val newsUiState = uiState.newsUiState
+
     when (newsUiState) {
         is HomeUiState.NewsUiState.Content -> {
-            val news = newsUiState.news
+            val news = uiState.filteredNews
 
             if (news.isEmpty()) {
                 item(key = KEY_NEWS_CONTENT) {
@@ -549,6 +562,7 @@ private fun HomeContentLightPreview() = AppTheme {
             visitedNews = visitedNews,
             isRefreshing = true,
             errorUiState = HomeUiState.ErrorUiState.Error,
+            selectedTickers = setOf(tickers.first()),
         ),
         onAction = {},
     )
@@ -636,6 +650,7 @@ private fun HomeContentDarkPreview() = AppTheme(darkTheme = true) {
             visitedNews = visitedNews,
             isRefreshing = true,
             errorUiState = HomeUiState.ErrorUiState.Error,
+            selectedTickers = setOf(tickers.first()),
         ),
         onAction = {},
     )

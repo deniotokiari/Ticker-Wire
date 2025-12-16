@@ -5,14 +5,24 @@ import pl.deniotokiari.tickerwire.model.TickerData
 import pl.deniotokiari.tickerwire.model.TickerNews
 
 data class HomeUiState(
-    val tickers: List<Ticker> = emptyList(),
-    val info: Map<Ticker, TickerData> = emptyMap(),
-    val isRefreshing: Boolean = false,
-    val isDarkTheme: Boolean = false,
-    val newsUiState: NewsUiState = NewsUiState.Loading,
-    val visitedNews: Set<TickerNews> = emptySet(),
     val errorUiState: ErrorUiState = ErrorUiState.None,
+    val info: Map<Ticker, TickerData> = emptyMap(),
+    val isDarkTheme: Boolean = false,
+    val isRefreshing: Boolean = false,
+    val newsUiState: NewsUiState = NewsUiState.Loading,
+    val selectedTickers: Set<Ticker> = emptySet(),
+    val tickers: List<Ticker> = emptyList(),
+    val visitedNews: Set<TickerNews> = emptySet(),
 ) {
+    val filteredNews: List<TickerNews>
+        get() = newsUiState.items.filter { item ->
+            if (selectedTickers.isEmpty()) {
+                true
+            } else {
+                selectedTickers.contains(item.ticker)
+            }
+        }
+
     sealed interface NewsUiState {
         data object Loading : NewsUiState
         data class Content(val news: List<TickerNews>) : NewsUiState
