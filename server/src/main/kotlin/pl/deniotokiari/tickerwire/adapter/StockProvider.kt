@@ -217,6 +217,7 @@ class StockProvider(
                 if (usage.canUse(config.limit, now)) {
                     val remainingCapacity = usage.getRemainingCapacity(config.limit, now)
                     val priority = priorityMap[provider] ?: Int.MAX_VALUE
+
                     ProviderCandidate(provider, config, priority, remainingCapacity)
                 } else {
                     null

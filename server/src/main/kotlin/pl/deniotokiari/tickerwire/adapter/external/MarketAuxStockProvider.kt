@@ -71,16 +71,16 @@ class MarketAuxStockProvider(
         val newsByTicker = mutableMapOf<String, MutableList<TickerNewsDto>>()
 
         // Initialize empty lists for all tickers
-        tickers.forEach { ticker ->
+        tickers.take(1).forEach { ticker ->
             newsByTicker[ticker] = mutableListOf()
         }
 
         try {
             val response: MarketAuxNewsResponse = client.get("$uri/news/all") {
                 parameter("api_token", apiKey)
-                parameter("symbols", tickers.joinToString(","))
+                parameter("symbols", newsByTicker.keys.joinToString(","))
                 parameter("filter_entities", "true")
-                parameter("limit", 50)
+                parameter("limit", 3)
             }.body()
 
             if (response.error != null) {
@@ -93,7 +93,7 @@ class MarketAuxStockProvider(
                 // Associate news with relevant tickers from entities
                 newsItem.entities?.forEach { entity ->
                     val symbol = entity.symbol
-                    if (symbol != null && tickers.contains(symbol)) {
+                    if (symbol != null && newsByTicker.contains(symbol)) {
                         newsByTicker[symbol]?.add(newsDto)
                     }
                 }

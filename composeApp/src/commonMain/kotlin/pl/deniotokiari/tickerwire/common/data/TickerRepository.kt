@@ -87,7 +87,6 @@ class TickerRepository(
                             }
                             .distinctBy { item -> item.title }
                             .sortedByDescending { item -> item.timestamp }
-                            .take(5)
 
                         _newsCache.put(key = symbol, data = news)
 
