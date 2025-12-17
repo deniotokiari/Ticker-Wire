@@ -22,6 +22,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DarkMode
@@ -248,6 +249,8 @@ private fun LazyListScope.watchListContent(
                                     .fillMaxWidth()
                                     .padding(bottom = Spacing.xs),
                                 text = item.symbol,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
                                 style = MaterialTheme.typography.bodyLarge.copy(
                                     color = MaterialTheme.colorScheme.onSurface,
                                     fontWeight = FontWeight.Medium,
@@ -273,6 +276,8 @@ private fun LazyListScope.watchListContent(
                                         .fillMaxWidth()
                                         .padding(top = Spacing.xs),
                                     text = currency + marketValue,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
                                     style = MaterialTheme.typography.bodyLarge.copy(
                                         color = MaterialTheme.colorScheme.onSurface,
                                         fontWeight = FontWeight.Bold,
@@ -283,10 +288,13 @@ private fun LazyListScope.watchListContent(
                                     modifier = Modifier
                                         .padding(top = Spacing.xxs)
                                         .fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
                                 ) {
                                     Text(
                                         modifier = Modifier.padding(end = Spacing.xs * 2),
                                         text = delta,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
                                         style = MaterialTheme.typography.bodySmall.copy(
                                             fontWeight = FontWeight.SemiBold,
                                         ),
@@ -295,6 +303,11 @@ private fun LazyListScope.watchListContent(
 
                                     Text(
                                         text = "($percent)",
+                                        maxLines = 1,
+                                        autoSize = TextAutoSize.StepBased(
+                                            minFontSize = MaterialTheme.typography.labelSmall.fontSize,
+                                            maxFontSize = MaterialTheme.typography.bodySmall.fontSize,
+                                        ),
                                         style = MaterialTheme.typography.bodySmall.copy(
                                             fontWeight = FontWeight.SemiBold,
                                         ),

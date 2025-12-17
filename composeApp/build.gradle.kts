@@ -174,7 +174,44 @@ android {
     }
     buildTypes {
         getByName("release") {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+            // Signing config will be set via environment variables or gradle.properties
+            // See signingConfigs block below
+        }
+    }
+    
+    signingConfigs {
+        // Release signing configuration
+        // In production, use environment variables or gradle.properties:
+        // storeFile=file("path/to/keystore.jks")
+        // storePassword=your_store_password
+        // keyAlias=your_key_alias
+        // keyPassword=your_key_password
+        create("release") {
+            val keystoreFile = project.findProperty("RELEASE_STORE_FILE") as String?
+            val keystorePassword = project.findProperty("RELEASE_STORE_PASSWORD") as String?
+            val keyAlias = project.findProperty("RELEASE_KEY_ALIAS") as String?
+            val keyPassword = project.findProperty("RELEASE_KEY_PASSWORD") as String?
+            
+            if (keystoreFile != null && keystorePassword != null && keyAlias != null && keyPassword != null) {
+                storeFile = file(keystoreFile)
+                storePassword = keystorePassword
+                this.keyAlias = keyAlias
+                this.keyPassword = keyPassword
+            }
+        }
+    }
+    
+    buildTypes.getByName("release") {
+        val releaseSigningConfig = signingConfigs.getByName("release")
+        val storeFile = releaseSigningConfig.storeFile
+        signingConfig = releaseSigningConfig.takeIf {
+            storeFile != null && storeFile.exists()
         }
     }
     compileOptions {
