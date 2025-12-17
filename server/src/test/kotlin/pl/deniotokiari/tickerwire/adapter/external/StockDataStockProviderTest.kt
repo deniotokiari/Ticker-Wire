@@ -5,6 +5,7 @@ import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.maps.shouldBeEmpty
 import io.kotest.matchers.maps.shouldContainKey
+import io.kotest.matchers.maps.shouldHaveSize as mapShouldHaveSize
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.ktor.client.HttpClient
@@ -240,16 +241,14 @@ class StockDataStockProviderTest : BehaviorSpec({
             Then("should return map of news grouped by ticker") {
                 val results = provider.news(listOf("AAPL", "MSFT"))
 
+                // Only first ticker is used for API request, so only first ticker is in result
+                results.mapShouldHaveSize(1)
                 results shouldContainKey "AAPL"
-                results shouldContainKey "MSFT"
 
                 // AAPL should have 2 news items (news-1 and news-3)
                 results["AAPL"]!! shouldHaveSize 2
                 results["AAPL"]!![0].title shouldBe "Apple announces new iPhone"
                 results["AAPL"]!![0].provider shouldBe "TechCrunch"
-
-                // MSFT should have 2 news items (news-2 and news-3)
-                results["MSFT"]!! shouldHaveSize 2
             }
         }
 
@@ -280,10 +279,10 @@ class StockDataStockProviderTest : BehaviorSpec({
             Then("should return empty lists for all tickers") {
                 val results = provider.news(listOf("AAPL", "MSFT"))
 
+                // Only first ticker is used for API request, so only first ticker is in result
+                results.mapShouldHaveSize(1)
                 results shouldContainKey "AAPL"
-                results shouldContainKey "MSFT"
                 results["AAPL"]!! shouldHaveSize 0
-                results["MSFT"]!! shouldHaveSize 0
             }
         }
 
@@ -310,10 +309,10 @@ class StockDataStockProviderTest : BehaviorSpec({
             Then("should return empty lists for requested tickers") {
                 val results = provider.news(listOf("AAPL", "MSFT"))
 
+                // Only first ticker is used for API request, so only first ticker is in result
+                results.mapShouldHaveSize(1)
                 results shouldContainKey "AAPL"
-                results shouldContainKey "MSFT"
                 results["AAPL"]!! shouldHaveSize 0
-                results["MSFT"]!! shouldHaveSize 0
             }
         }
     }

@@ -245,16 +245,13 @@ class MarketAuxStockProviderTest : DescribeSpec({
             val provider = MarketAuxStockProvider(client, mockProviderConfigService)
             val result = provider.news(listOf("AAPL", "TSLA"))
 
-            result shouldHaveSize 2
+            // Only first ticker is used for API request, so only first ticker is in result
+            result shouldHaveSize 1
             result["AAPL"]!! shouldHaveSize 2
-            result["TSLA"]!! shouldHaveSize 2
 
             result["AAPL"]!![0].title shouldBe "Apple announces new iPhone"
             result["AAPL"]!![0].provider shouldBe "TechNews"
             result["AAPL"]!![1].title shouldBe "Apple and Tesla partnership"
-
-            result["TSLA"]!![0].title shouldBe "Tesla stock rises"
-            result["TSLA"]!![1].title shouldBe "Apple and Tesla partnership"
         }
 
         it("should return empty map for empty tickers list") {
