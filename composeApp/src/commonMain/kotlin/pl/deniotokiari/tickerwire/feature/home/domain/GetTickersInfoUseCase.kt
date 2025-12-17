@@ -9,7 +9,8 @@ import pl.deniotokiari.tickerwire.model.TickerData
 class GetTickersInfoUseCase(
     private val tickerRepository: TickerRepository,
 ) {
-    suspend operator fun invoke(tickers: List<Ticker>): Map<Ticker, TickerData> {
-        return tickerRepository.info(tickers)
-    }
+    suspend operator fun invoke(tickers: List<Ticker>): Result<Map<Ticker, TickerData>> =
+        runCatching {
+            tickerRepository.info(tickers)
+        }
 }

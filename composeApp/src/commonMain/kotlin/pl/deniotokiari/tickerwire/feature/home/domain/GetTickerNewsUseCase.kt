@@ -9,7 +9,7 @@ import pl.deniotokiari.tickerwire.model.TickerNews
 class GetTickerNewsUseCase(
     private val tickerRepository: TickerRepository,
 ) {
-    suspend operator fun invoke(tickers: List<Ticker>): List<TickerNews> {
-        return tickerRepository.news(tickers)
+    suspend operator fun invoke(tickers: List<Ticker>): Result<List<TickerNews>> = runCatching {
+        tickerRepository.news(tickers)
     }
 }

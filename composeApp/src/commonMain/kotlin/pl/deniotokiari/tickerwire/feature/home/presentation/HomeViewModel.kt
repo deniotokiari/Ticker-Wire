@@ -146,16 +146,18 @@ class HomeViewModel(
     }
 
     private suspend fun loadNews(tickers: List<Ticker>): List<TickerNews> {
-        return getTickerNewsUseCase(tickers).also { news ->
-            _uiState.update { state ->
-                state.copy(newsUiState = HomeUiState.NewsUiState.Content(news))
+        return getTickerNewsUseCase(tickers)
+            .getOrElse { emptyList() }
+            .also { news ->
+                _uiState.update { state ->
+                    state.copy(newsUiState = HomeUiState.NewsUiState.Content(news))
+                }
             }
-        }
     }
 
     private suspend fun loadInfo(tickers: List<Ticker>) {
         _uiState.update { state ->
-            state.copy(info = getTickersInfoUseCase(tickers))
+            state.copy(info = getTickersInfoUseCase(tickers).getOrElse { emptyMap() })
         }
     }
 
@@ -168,16 +170,23 @@ class HomeViewModel(
     }
 
     private suspend fun refreshTickersData(tickers: List<Ticker>) {
-        if (tickers.isEmpty()) return
-
-        coroutineScope {
-            launch {
-                val news = loadNews(tickers)
-
-                loadVisitedNews(news)
+        if (tickers.isEmpty()) {
+            _uiState.update { state ->
+                state.copy(
+                    newsUiState = HomeUiState.NewsUiState.Content(emptyList()),
+                    info = emptyMap(),
+                )
             }
+        } else {
+            coroutineScope {
+                launch {
+                    val news = loadNews(tickers)
 
-            launch { loadInfo(tickers) }
+                    loadVisitedNews(news)
+                }
+
+                launch { loadInfo(tickers) }
+            }
         }
     }
 
