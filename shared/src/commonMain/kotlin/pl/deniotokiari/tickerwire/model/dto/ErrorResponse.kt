@@ -1,4 +1,4 @@
-package pl.deniotokiari.tickerwire.models
+package pl.deniotokiari.tickerwire.model.dto
 
 import kotlinx.serialization.Serializable
 
@@ -9,4 +9,3 @@ data class ErrorResponse(
     val error: String,
     val requestId: String? = null,
 )
-

@@ -84,18 +84,26 @@ class StockProvider(
     suspend fun search(query: String): List<TickerDto> {
         val cached = searchCache.get(query)
 
-        return if (cached == null) {
-            val (_, result) = makeCall(searchProviders, SEARCH_PRIORITY) {
-                it.search(query)
+        if (cached == null) {
+            val providers = searchProviders.toMutableMap()
+
+            while (providers.isNotEmpty()) {
+                val (provider, result) = makeCall(providers, SEARCH_PRIORITY) {
+                    it.search(query)
+                }
+
+                if (result.isNotEmpty()) {
+                    searchCache.put(query, result)
+
+                    return result
+                } else {
+                    providers.remove(provider)
+                }
             }
 
-            if (result.isNotEmpty()) {
-                searchCache.put(query, result)
-            }
-
-            result
+            return emptyList()
         } else {
-            cached
+            return cached
         }
     }
 

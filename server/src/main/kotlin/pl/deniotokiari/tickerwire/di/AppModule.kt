@@ -14,6 +14,7 @@ import org.koin.dsl.module
 import pl.deniotokiari.tickerwire.services.FirebaseRemoteConfigService
 import pl.deniotokiari.tickerwire.services.FirestoreLimitUsageService
 import pl.deniotokiari.tickerwire.services.ProviderConfigService
+import pl.deniotokiari.tickerwire.services.RequestLimitsService
 import pl.deniotokiari.tickerwire.services.TtlConfigService
 import pl.deniotokiari.tickerwire.services.analytics.ProviderStatsService
 import pl.deniotokiari.tickerwire.services.cache.CacheCleanupScheduler
@@ -56,6 +57,7 @@ val appModule = module {
     single { FirestoreLimitUsageService(firestore = get()) }
     singleOf(::ProviderConfigService)
     singleOf(::TtlConfigService)
+    singleOf(::RequestLimitsService)
 
     // Stats Service
     single { ProviderStatsService(firestore = get()) }

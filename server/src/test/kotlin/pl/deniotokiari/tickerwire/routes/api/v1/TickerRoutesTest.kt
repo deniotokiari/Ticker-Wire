@@ -23,7 +23,6 @@ import pl.deniotokiari.tickerwire.adapter.StockProvider
 import pl.deniotokiari.tickerwire.model.dto.TickerDto
 import pl.deniotokiari.tickerwire.model.dto.TickerInfoDto
 import pl.deniotokiari.tickerwire.model.dto.TickerNewsDto
-import pl.deniotokiari.tickerwire.models.ErrorResponse
 
 class TickerRoutesTest : BehaviorSpec({
 

@@ -8,11 +8,10 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.route
 import pl.deniotokiari.tickerwire.adapter.StockProvider
+import pl.deniotokiari.tickerwire.services.RequestLimitsService
 
 // Request limits
-private const val MAX_TICKERS_PER_REQUEST = 50
 private const val MAX_QUERY_LENGTH = 100
-private const val MAX_TICKER_LENGTH = 10
 
 // Ticker format: alphanumeric, dots, and hyphens (e.g., BRK.A, BRK-B)
 private val TICKER_PATTERN = Regex("^[A-Za-z0-9.-]+$")
@@ -43,13 +42,13 @@ private fun validateSearchQuery(query: String?): String {
 /**
  * Validates a list of ticker symbols
  */
-private fun validateTickerList(tickers: List<String>): List<String> {
+private fun validateTickerList(tickers: List<String>, tickersLimit: Int): List<String> {
     if (tickers.isEmpty()) {
         throw RequestValidationException("Ticker list cannot be empty")
     }
 
-    if (tickers.size > MAX_TICKERS_PER_REQUEST) {
-        throw RequestValidationException("Request exceeds maximum of $MAX_TICKERS_PER_REQUEST tickers")
+    if (tickers.size > tickersLimit) {
+        throw RequestValidationException("Request exceeds maximum of tickers limit: $tickersLimit")
     }
 
     return tickers.map { ticker ->
@@ -57,10 +56,6 @@ private fun validateTickerList(tickers: List<String>): List<String> {
 
         if (trimmedTicker.isBlank()) {
             throw RequestValidationException("Ticker symbol cannot be empty")
-        }
-
-        if (trimmedTicker.length > MAX_TICKER_LENGTH) {
-            throw RequestValidationException("Ticker '$trimmedTicker' exceeds maximum length of $MAX_TICKER_LENGTH characters")
         }
 
         if (!TICKER_PATTERN.matches(trimmedTicker)) {
@@ -71,7 +66,10 @@ private fun validateTickerList(tickers: List<String>): List<String> {
     }.distinct() // Remove duplicates
 }
 
-fun Route.tickerRoutes(stockProvider: StockProvider) {
+fun Route.tickerRoutes(
+    stockProvider: StockProvider,
+    requestLimitsService: RequestLimitsService,
+) {
     route("/api/v1/tickers") {
         get("/search") {
             val query = validateSearchQuery(call.request.queryParameters["query"])
@@ -82,8 +80,12 @@ fun Route.tickerRoutes(stockProvider: StockProvider) {
 
         post("/news") {
             val request = call.receive<List<String>>()
-            val validatedTickers = validateTickerList(request)
-            val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 10
+            val validatedTickers = validateTickerList(
+                tickers = request,
+                tickersLimit = requestLimitsService.limits.tickers,
+            )
+            val limit = call.request.queryParameters["limit"]?.toIntOrNull()
+                ?: requestLimitsService.limits.news
             val result = stockProvider.news(validatedTickers, limit)
 
             call.respond(HttpStatusCode.OK, result)
@@ -91,7 +93,10 @@ fun Route.tickerRoutes(stockProvider: StockProvider) {
 
         post("/info") {
             val request = call.receive<List<String>>()
-            val validatedTickers = validateTickerList(request)
+            val validatedTickers = validateTickerList(
+                tickers = request,
+                tickersLimit = requestLimitsService.limits.tickers,
+            )
             val result = stockProvider.info(validatedTickers)
 
             call.respond(HttpStatusCode.OK, result)

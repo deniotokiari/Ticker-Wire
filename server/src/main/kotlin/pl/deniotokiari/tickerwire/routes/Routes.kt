@@ -11,11 +11,13 @@ import pl.deniotokiari.tickerwire.adapter.StockProvider
 import pl.deniotokiari.tickerwire.routes.api.v1.statsRoutes
 import pl.deniotokiari.tickerwire.routes.api.v1.tickerRoutes
 import pl.deniotokiari.tickerwire.routes.api.v1.ttlConfigRoutes
+import pl.deniotokiari.tickerwire.services.RequestLimitsService
 import pl.deniotokiari.tickerwire.services.TtlConfigService
 
 fun Application.configureRouting() {
     val stockProvider: StockProvider by inject()
     val ttlConfigService: TtlConfigService by inject()
+    val requestLimitsService: RequestLimitsService by inject()
 
     routing {
         // Root endpoint
@@ -27,7 +29,7 @@ fun Application.configureRouting() {
         healthRoutes()
 
         // API routes
-        tickerRoutes(stockProvider)
+        tickerRoutes(stockProvider, requestLimitsService)
         ttlConfigRoutes(ttlConfigService)
 
         // Stats routes

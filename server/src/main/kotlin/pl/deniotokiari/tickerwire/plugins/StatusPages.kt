@@ -7,7 +7,7 @@ import io.ktor.server.plugins.statuspages.StatusPages
 import io.ktor.server.response.respond
 import org.slf4j.LoggerFactory
 import org.slf4j.MDC
-import pl.deniotokiari.tickerwire.models.ErrorResponse
+import pl.deniotokiari.tickerwire.model.dto.ErrorResponse
 import pl.deniotokiari.tickerwire.models.Provider
 import pl.deniotokiari.tickerwire.routes.api.v1.RequestValidationException
 

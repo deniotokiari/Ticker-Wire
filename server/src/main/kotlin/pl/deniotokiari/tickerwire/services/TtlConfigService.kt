@@ -5,8 +5,6 @@ import pl.deniotokiari.tickerwire.model.AppTtlConfig
 import pl.deniotokiari.tickerwire.model.TtlConfig
 
 private const val TTL = "ttl"
-private const val TTL_SERVER = "server"
-private const val TTL_CLIENT = "client"
 
 class TtlConfigService(
     private val firebaseRemoteConfigService: FirebaseRemoteConfigService,
