@@ -4,6 +4,7 @@ import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.get
 import io.ktor.client.request.parameter
+import kotlinx.coroutines.channels.ticker
 import pl.deniotokiari.tickerwire.adapter.StockInfoProvider
 import pl.deniotokiari.tickerwire.adapter.StockNewsProvider
 import pl.deniotokiari.tickerwire.adapter.StockSearchProvider
@@ -56,39 +57,29 @@ class FinnHubStockProvider(
         } ?: emptyList()
     }
 
-    override suspend fun news(tickers: Collection<String>): Map<String, List<TickerNewsDto>> {
-        if (tickers.isEmpty()) {
-            return emptyMap()
-        }
-
+    override suspend fun news(ticker: String, limit: Int): List<TickerNewsDto> {
         val config = providerConfigService.get(Provider.FINNHUB)
-        val newsByTicker = mutableMapOf<String, List<TickerNewsDto>>()
-
         // Get news from the last 7 days
         val today = LocalDate.now()
         val fromDate = today.minusDays(7)
         val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
 
-        tickers.take(1).forEach { ticker ->
-            try {
-                val response: List<FinnhubNewsItem> = client.get("${config.apiUri}/company-news") {
-                    parameter("symbol", ticker)
-                    parameter("from", fromDate.format(dateFormatter))
-                    parameter("to", today.format(dateFormatter))
-                    parameter("token", config.apiKey)
-                }.body()
+        return try {
+            val response: List<FinnhubNewsItem> = client.get("${config.apiUri}/company-news") {
+                parameter("symbol", ticker)
+                parameter("from", fromDate.format(dateFormatter))
+                parameter("to", today.format(dateFormatter))
+                parameter("token", config.apiKey)
+            }.body()
 
-                val newsItems = response.mapNotNull { newsItem ->
-                    convertToTickerNewsDto(newsItem)
-                }.take(10)
+            val newsItems = response.mapNotNull { newsItem ->
+                convertToTickerNewsDto(newsItem)
+            }.take(limit)
 
-                newsByTicker[ticker] = newsItems
-            } catch (_: Exception) {
-                newsByTicker[ticker] = emptyList()
-            }
+            newsItems
+        } catch (_: Exception) {
+            emptyList()
         }
-
-        return newsByTicker
     }
 
     override suspend fun info(tickers: Collection<String>): Map<String, TickerInfoDto> {

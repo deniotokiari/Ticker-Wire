@@ -61,50 +61,27 @@ class MarketAuxStockProvider(
      * Get news for tickers
      * GET https://api.marketaux.com/v1/news/all?symbols={tickers}
      */
-    override suspend fun news(tickers: Collection<String>): Map<String, List<TickerNewsDto>> {
-        if (tickers.isEmpty()) {
-            return emptyMap()
-        }
-
+    override suspend fun news(ticker: String, limit: Int): List<TickerNewsDto> {
         val (uri, apiKey) = providerConfigService.get(Provider.MARKETAUX)
-
-        val newsByTicker = mutableMapOf<String, MutableList<TickerNewsDto>>()
-
-        // Initialize empty lists for all tickers
-        tickers.take(1).forEach { ticker ->
-            newsByTicker[ticker] = mutableListOf()
-        }
 
         try {
             val response: MarketAuxNewsResponse = client.get("$uri/news/all") {
                 parameter("api_token", apiKey)
-                parameter("symbols", newsByTicker.keys.joinToString(","))
+                parameter("symbols", ticker)
                 parameter("filter_entities", "true")
                 parameter("limit", 3)
             }.body()
 
             if (response.error != null) {
-                return newsByTicker.mapValues { it.value.toList() }
+                return emptyList()
             }
 
-            response.data?.forEach { newsItem ->
-                val newsDto = convertToTickerNewsDto(newsItem)
+            return response.data?.map { newsItem ->
+                convertToTickerNewsDto(newsItem)
+            } ?: emptyList()
 
-                // Associate news with relevant tickers from entities
-                newsItem.entities?.forEach { entity ->
-                    val symbol = entity.symbol
-                    if (symbol != null && newsByTicker.contains(symbol)) {
-                        newsByTicker[symbol]?.add(newsDto)
-                    }
-                }
-            }
-
-            // Limit to 10 news items per ticker
-            return newsByTicker.mapValues { (_, newsList) ->
-                newsList.take(10)
-            }
         } catch (_: Exception) {
-            return newsByTicker.mapValues { it.value.toList() }
+            return emptyList()
         }
     }
 

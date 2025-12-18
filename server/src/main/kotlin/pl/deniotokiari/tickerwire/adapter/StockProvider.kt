@@ -5,6 +5,7 @@ import pl.deniotokiari.tickerwire.model.dto.TickerInfoDto
 import pl.deniotokiari.tickerwire.model.dto.TickerNewsDto
 import pl.deniotokiari.tickerwire.models.Provider
 import pl.deniotokiari.tickerwire.models.ProviderConfig
+import pl.deniotokiari.tickerwire.plugins.NoAvailableProviderException
 import pl.deniotokiari.tickerwire.services.FirestoreLimitUsageService
 import pl.deniotokiari.tickerwire.services.ProviderConfigService
 import pl.deniotokiari.tickerwire.services.analytics.ProviderStatsService
@@ -37,7 +38,7 @@ class StockProvider(
     private val newsCache: FirestoreCacheService<List<TickerNewsDto>>,
     private val infoCache: FirestoreCacheService<TickerInfoDto>,
     private val statsService: ProviderStatsService,
-) : StockNewsProvider, StockSearchProvider, StockInfoProvider {
+) {
 
     companion object {
         /**
@@ -80,7 +81,7 @@ class StockProvider(
         )
     }
 
-    override suspend fun search(query: String): List<TickerDto> {
+    suspend fun search(query: String): List<TickerDto> {
         val cached = searchCache.get(query)
 
         return if (cached == null) {
@@ -98,24 +99,100 @@ class StockProvider(
         }
     }
 
-    override suspend fun news(tickers: Collection<String>): Map<String, List<TickerNewsDto>> {
-        return batchCall(
-            tickers = tickers,
-            candidates = newsProviders,
-            priorityMap = NEWS_PRIORITY,
-            cache = newsCache,
-            call = StockNewsProvider::news,
-        )
+    suspend fun news(tickers: Collection<String>, limit: Int): Map<String, List<TickerNewsDto>> {
+        val cached = mutableMapOf<String, List<TickerNewsDto>>()
+        val nonCached = mutableSetOf<String>()
+        val providers = newsProviders.toMutableMap()
+        var remainingLimit = limit
+
+        tickers.forEach { ticker ->
+            val news = newsCache.get(ticker)
+
+            if (news == null) {
+                nonCached.add(ticker)
+            } else {
+                cached[ticker] = news
+            }
+        }
+
+        while (nonCached.isNotEmpty()) {
+            val ticker = nonCached.first()
+
+            runCatching {
+                makeCall(
+                    candidates = providers,
+                    priorityMap = NEWS_PRIORITY,
+                    call = { provider ->
+                        provider.news(ticker = ticker, limit = remainingLimit)
+                    },
+                )
+            }.onSuccess { (provider, result) ->
+                if (result.size < remainingLimit) {
+                    providers.remove(provider)
+                    remainingLimit -= result.size
+                } else {
+                    remainingLimit = limit
+                    nonCached.remove(ticker)
+                }
+
+                ((cached[ticker] ?: emptyList()) + result).let { items ->
+                    cached[ticker] = items
+
+                    newsCache.put(ticker, items)
+                }
+            }.onFailure { error ->
+                if (error is AllProvidersHaveReachedTheirLimitsException && cached.isEmpty()) {
+                    throw error
+                }
+            }
+        }
+
+        return cached
     }
 
-    override suspend fun info(tickers: Collection<String>): Map<String, TickerInfoDto> {
-        return batchCall(
-            tickers = tickers,
-            candidates = infoProviders,
-            priorityMap = INFO_PRIORITY,
-            cache = infoCache,
-            call = StockInfoProvider::info,
-        )
+    suspend fun info(tickers: Collection<String>): Map<String, TickerInfoDto> {
+        val cached = mutableMapOf<String, TickerInfoDto>()
+        val nonCached = mutableSetOf<String>()
+        val providers = infoProviders.toMutableMap()
+
+        tickers.forEach { ticker ->
+            val info = infoCache.get(ticker)
+
+            if (info == null) {
+                nonCached.add(ticker)
+            } else {
+                cached[ticker] = info
+            }
+        }
+
+        while (nonCached.isNotEmpty()) {
+            runCatching {
+                makeCall(
+                    candidates = providers,
+                    priorityMap = INFO_PRIORITY,
+                    call = { provider ->
+                        provider.info(nonCached)
+                    }
+                )
+            }.onSuccess { (provider, result) ->
+                result.forEach { (ticker, info) ->
+                    infoCache.put(ticker, info)
+
+                    cached[ticker] = info
+                    nonCached.remove(ticker)
+                }
+
+                if (result.isEmpty()) {
+                    providers.remove(provider)
+                }
+            }.onFailure { error ->
+                if (error is AllProvidersHaveReachedTheirLimitsException && cached.isEmpty()) {
+                    throw error
+                }
+            }
+        }
+
+        return cached
     }
 
     private suspend fun <T, P> makeCall(
@@ -136,60 +213,6 @@ class StockProvider(
             statsService.recordFailure(provider)
             throw e
         }
-    }
-
-    private suspend fun <StockProvider, Result : Any> batchCall(
-        tickers: Collection<String>,
-        candidates: Map<Provider, StockProvider>,
-        priorityMap: Map<Provider, Int>,
-        cache: FirestoreCacheService<Result>,
-        call: suspend (StockProvider, Collection<String>) -> Map<String, Result>,
-    ): Map<String, Result> {
-        val cached = mutableMapOf<String, Result>()
-        val nonCached = mutableSetOf<String>()
-        val candidates = candidates.toMutableMap()
-
-        tickers.forEach { ticker ->
-            val data = cache.get(ticker)
-
-            if (data == null) {
-                nonCached.add(ticker)
-            } else {
-                cached[ticker] = data
-            }
-        }
-
-        while (nonCached.isNotEmpty()) {
-            runCatching {
-                makeCall(candidates, priorityMap) { provider ->
-                    call(
-                        provider,
-                        nonCached,
-                    )
-                }
-            }.onSuccess { (provider, result) ->
-                for ((symbol, dto) in result) {
-                    if (dto is Collection<*> && dto.isNotEmpty()) {
-                        cache.put(symbol, dto)
-                    } else {
-                        cache.put(symbol, dto)
-                    }
-
-                    cached[symbol] = dto
-                    nonCached.remove(symbol)
-                }
-
-                if (result.isEmpty()) {
-                    candidates.remove(provider)
-                }
-            }.onFailure { error ->
-                if (error is AllProvidersHaveReachedTheirLimitsException && cached.isEmpty()) {
-                    throw error
-                }
-            }
-        }
-
-        return cached
     }
 
     /**
@@ -249,11 +272,6 @@ class StockProvider(
         val remainingCapacity: Int,
     )
 }
-
-/**
- * Exception thrown when no provider is available due to rate limits
- */
-class NoAvailableProviderException(message: String) : Exception(message)
 
 class AllProvidersHaveReachedTheirLimitsException() :
     Exception("All providers have reached their limits")

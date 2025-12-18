@@ -4,6 +4,7 @@ import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.get
 import io.ktor.client.request.parameter
+import kotlinx.coroutines.channels.ticker
 import pl.deniotokiari.tickerwire.adapter.StockInfoProvider
 import pl.deniotokiari.tickerwire.adapter.StockNewsProvider
 import pl.deniotokiari.tickerwire.adapter.StockSearchProvider
@@ -49,49 +50,34 @@ class AlphaVantageStockProvider(
         } ?: emptyList()
     }
 
-    override suspend fun news(tickers: Collection<String>): Map<String, List<TickerNewsDto>> {
-        if (tickers.isEmpty()) {
-            return emptyMap()
-        }
-
+    override suspend fun news(ticker: String, limit: Int): List<TickerNewsDto> {
         val (uri, apiKey) = providerConfigService.get(Provider.ALPHAVANTAGE)
 
-        val newsByTicker = mutableMapOf<String, List<TickerNewsDto>>()
+        try {
+            val response: AlphaVantageNewsResponse = client.get(uri) {
+                parameter("function", "NEWS_SENTIMENT")
+                parameter("tickers", ticker)
+                parameter("limit", limit)
+                parameter("apikey", apiKey)
+            }.body()
 
-        tickers.take(1).forEach { ticker ->
-            try {
-                val response: AlphaVantageNewsResponse = client.get(uri) {
-                    parameter("function", "NEWS_SENTIMENT")
-                    parameter("tickers", ticker)
-                    parameter("limit", "10")
-                    parameter("apikey", apiKey)
-                }.body()
-
-                if (response.errorMessage != null) {
-                    newsByTicker[ticker] = emptyList()
-
-                    return@forEach
-                }
-
-                if (response.note != null) {
-                    newsByTicker[ticker] = emptyList()
-
-                    return@forEach
-                }
-
-                val newsItems = response.feed
-                    ?.filter { newsItem -> newsItem.tickerSentiment?.any { it.ticker == ticker } == true }
-                    ?.map { newsItem -> convertToTickerNewsDto(newsItem) }
-                    ?.take(10)
-                    ?: emptyList()
-
-                newsByTicker[ticker] = newsItems
-            } catch (_: Exception) {
-                newsByTicker[ticker] = emptyList()
+            if (response.errorMessage != null) {
+                return emptyList()
             }
-        }
 
-        return newsByTicker
+            if (response.note != null) {
+                return emptyList()
+            }
+
+            val newsItems = response.feed
+                ?.filter { newsItem -> newsItem.tickerSentiment?.any { it.ticker == ticker } == true }
+                ?.map { newsItem -> convertToTickerNewsDto(newsItem) }
+                ?: emptyList()
+
+            return newsItems
+        } catch (_: Exception) {
+            return emptyList()
+        }
     }
 
     override suspend fun info(tickers: Collection<String>): Map<String, TickerInfoDto> {

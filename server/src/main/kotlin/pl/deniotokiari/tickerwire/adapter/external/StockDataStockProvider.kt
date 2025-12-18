@@ -4,6 +4,7 @@ import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.get
 import io.ktor.client.request.parameter
+import kotlinx.coroutines.channels.ticker
 import pl.deniotokiari.tickerwire.adapter.StockInfoProvider
 import pl.deniotokiari.tickerwire.adapter.StockNewsProvider
 import pl.deniotokiari.tickerwire.adapter.StockSearchProvider
@@ -15,6 +16,7 @@ import pl.deniotokiari.tickerwire.models.external.StockDataNewsResponse
 import pl.deniotokiari.tickerwire.models.external.StockDataQuoteResponse
 import pl.deniotokiari.tickerwire.models.external.StockDataSearchResponse
 import pl.deniotokiari.tickerwire.services.ProviderConfigService
+import sun.jvm.hotspot.HelloWorld.e
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -65,50 +67,26 @@ class StockDataStockProvider(
      * Get news for tickers
      * GET https://api.stockdata.org/v1/news/all?symbols={tickers}
      */
-    override suspend fun news(tickers: Collection<String>): Map<String, List<TickerNewsDto>> {
-        if (tickers.isEmpty()) {
-            return emptyMap()
-        }
-
+    override suspend fun news(ticker: String, limit: Int): List<TickerNewsDto> {
         val (uri, apiKey) = providerConfigService.get(Provider.STOCKDATA)
-
-        val newsByTicker = mutableMapOf<String, MutableList<TickerNewsDto>>()
-        
-        // Initialize empty lists for all tickers
-        tickers.take(1).forEach { ticker ->
-            newsByTicker[ticker] = mutableListOf()
-        }
 
         try {
             val response: StockDataNewsResponse = client.get("$uri/news/all") {
                 parameter("api_token", apiKey)
-                parameter("symbols", newsByTicker.keys.joinToString(","))
+                parameter("symbols", ticker)
                 parameter("filter_entities", "true")
                 parameter("limit", 3)
             }.body()
 
             if (response.error != null) {
-                return newsByTicker.mapValues { it.value.toList() }
+                return emptyList()
             }
 
-            response.data?.forEach { newsItem ->
-                val newsDto = convertToTickerNewsDto(newsItem)
-                
-                // Associate news with relevant tickers from entities
-                newsItem.entities?.forEach { entity ->
-                    val symbol = entity.symbol
-                    if (symbol != null && newsByTicker.contains(symbol)) {
-                        newsByTicker[symbol]?.add(newsDto)
-                    }
-                }
-            }
-
-            // Limit to 10 news items per ticker
-            return newsByTicker.mapValues { (_, newsList) ->
-                newsList.take(10)
-            }
+            return response.data?.map { newsItem ->
+                convertToTickerNewsDto(newsItem)
+            } ?: emptyList()
         } catch (_: Exception) {
-            return newsByTicker.mapValues { it.value.toList() }
+            return emptyList()
         }
     }
 

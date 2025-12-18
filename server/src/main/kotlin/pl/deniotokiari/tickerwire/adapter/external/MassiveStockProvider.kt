@@ -5,6 +5,7 @@ import io.ktor.client.call.body
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.parameter
+import kotlinx.coroutines.channels.ticker
 import pl.deniotokiari.tickerwire.adapter.StockInfoProvider
 import pl.deniotokiari.tickerwire.adapter.StockNewsProvider
 import pl.deniotokiari.tickerwire.adapter.StockSearchProvider
@@ -61,33 +62,24 @@ class MassiveStockProvider(
         } ?: emptyList()
     }
 
-    override suspend fun news(tickers: Collection<String>): Map<String, List<TickerNewsDto>> {
-        if (tickers.isEmpty()) {
-            return emptyMap()
-        }
-
+    override suspend fun news(ticker: String, limit: Int): List<TickerNewsDto> {
         val config = providerConfigService.get(Provider.MASSIVE)
-        val newsByTicker = mutableMapOf<String, List<TickerNewsDto>>()
 
-        tickers.take(1).forEach { ticker ->
-            try {
-                val response: MassiveNewsResponse = client.get("${config.apiUri}/v2/reference/news") {
-                    parameter("ticker", ticker)
-                    parameter("limit", 10)
-                    header("Authorization", "Bearer ${config.apiKey}")
-                }.body()
+        return try {
+            val response: MassiveNewsResponse = client.get("${config.apiUri}/v2/reference/news") {
+                parameter("ticker", ticker)
+                parameter("limit", limit)
+                header("Authorization", "Bearer ${config.apiKey}")
+            }.body()
 
-                val newsItems = response.results?.mapNotNull { newsItem ->
-                    convertToTickerNewsDto(newsItem)
-                }?.take(10) ?: emptyList()
+            val newsItems = response.results?.mapNotNull { newsItem ->
+                convertToTickerNewsDto(newsItem)
+            } ?: emptyList()
 
-                newsByTicker[ticker] = newsItems
-            } catch (_: Exception) {
-                newsByTicker[ticker] = emptyList()
-            }
+            newsItems
+        } catch (_: Exception) {
+            emptyList()
         }
-
-        return newsByTicker
     }
 
     override suspend fun info(tickers: Collection<String>): Map<String, TickerInfoDto> {
