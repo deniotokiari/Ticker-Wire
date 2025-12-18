@@ -7,7 +7,7 @@ plugins {
 }
 
 group = "pl.deniotokiari.tickerwire"
-version = "1.0.0"
+version = "1.0.2"
 application {
     mainClass.set("pl.deniotokiari.tickerwire.ApplicationKt")
     
