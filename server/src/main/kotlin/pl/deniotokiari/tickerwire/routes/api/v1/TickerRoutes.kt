@@ -83,7 +83,8 @@ fun Route.tickerRoutes(stockProvider: StockProvider) {
         post("/news") {
             val request = call.receive<List<String>>()
             val validatedTickers = validateTickerList(request)
-            val result = stockProvider.news(validatedTickers)
+            val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 10
+            val result = stockProvider.news(validatedTickers, limit)
 
             call.respond(HttpStatusCode.OK, result)
         }

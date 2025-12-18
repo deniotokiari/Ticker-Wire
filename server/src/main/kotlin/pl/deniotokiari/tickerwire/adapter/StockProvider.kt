@@ -143,6 +143,8 @@ class StockProvider(
             }.onFailure { error ->
                 if (error is AllProvidersHaveReachedTheirLimitsException && cached.isEmpty()) {
                     throw error
+                } else if (error is NoAvailableProviderException) {
+                    providers.remove(error.provider)
                 }
             }
         }
@@ -188,6 +190,8 @@ class StockProvider(
             }.onFailure { error ->
                 if (error is AllProvidersHaveReachedTheirLimitsException && cached.isEmpty()) {
                     throw error
+                } else if (error is NoAvailableProviderException) {
+                    providers.remove(error.provider)
                 }
             }
         }
@@ -203,7 +207,10 @@ class StockProvider(
         val (provider, config) = getAvailableProvider(candidates.keys, priorityMap)
 
         limitUsageService.tryIncrementUsage(provider, config.limit)
-            ?: throw NoAvailableProviderException("Provider $provider has reached its limit")
+            ?: throw NoAvailableProviderException(
+                "Provider $provider has reached its limit",
+                provider,
+            )
 
         statsService.recordSelection(provider)
 

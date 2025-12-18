@@ -4,7 +4,6 @@ import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.get
 import io.ktor.client.request.parameter
-import kotlinx.coroutines.channels.ticker
 import pl.deniotokiari.tickerwire.adapter.StockInfoProvider
 import pl.deniotokiari.tickerwire.adapter.StockNewsProvider
 import pl.deniotokiari.tickerwire.adapter.StockSearchProvider
@@ -16,7 +15,6 @@ import pl.deniotokiari.tickerwire.models.external.StockDataNewsResponse
 import pl.deniotokiari.tickerwire.models.external.StockDataQuoteResponse
 import pl.deniotokiari.tickerwire.models.external.StockDataSearchResponse
 import pl.deniotokiari.tickerwire.services.ProviderConfigService
-import sun.jvm.hotspot.HelloWorld.e
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale

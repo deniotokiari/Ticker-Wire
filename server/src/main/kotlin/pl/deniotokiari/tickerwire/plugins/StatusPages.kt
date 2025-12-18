@@ -8,6 +8,7 @@ import io.ktor.server.response.respond
 import org.slf4j.LoggerFactory
 import org.slf4j.MDC
 import pl.deniotokiari.tickerwire.models.ErrorResponse
+import pl.deniotokiari.tickerwire.models.Provider
 import pl.deniotokiari.tickerwire.routes.api.v1.RequestValidationException
 
 private val logger = LoggerFactory.getLogger("StatusPages")
@@ -26,7 +27,7 @@ fun Application.configureStatusPages() {
         exception<RequestValidationException> { call, cause ->
             val requestId = getRequestId()
             logger.warn("Request validation failed [requestId=$requestId]: ${cause.message}")
-            
+
             call.respond(
                 HttpStatusCode.BadRequest,
                 ErrorResponse(
@@ -41,7 +42,7 @@ fun Application.configureStatusPages() {
         exception<ValidationException> { call, cause ->
             val requestId = getRequestId()
             logger.warn("Validation failed [requestId=$requestId]: ${cause.message}")
-            
+
             call.respond(
                 HttpStatusCode.BadRequest,
                 ErrorResponse(
@@ -52,10 +53,10 @@ fun Application.configureStatusPages() {
                 )
             )
         }
-        
+
         exception<NotFoundException> { call, cause ->
             val requestId = getRequestId()
-            
+
             call.respond(
                 HttpStatusCode.NotFound,
                 ErrorResponse(
@@ -71,12 +72,13 @@ fun Application.configureStatusPages() {
         exception<NoAvailableProviderException> { call, cause ->
             val requestId = getRequestId()
             logger.warn("No available provider [requestId=$requestId]: ${cause.message}")
-            
+
             call.respond(
                 HttpStatusCode.ServiceUnavailable,
                 ErrorResponse(
                     status = HttpStatusCode.ServiceUnavailable.value,
-                    message = cause.message ?: "Service temporarily unavailable. Please try again later.",
+                    message = cause.message
+                        ?: "Service temporarily unavailable. Please try again later.",
                     error = "ServiceUnavailable",
                     requestId = requestId,
                 )
@@ -87,7 +89,7 @@ fun Application.configureStatusPages() {
         exception<RateLimitException> { call, cause ->
             val requestId = getRequestId()
             logger.warn("Rate limit exceeded [requestId=$requestId]: ${cause.message}")
-            
+
             call.respond(
                 HttpStatusCode.TooManyRequests,
                 ErrorResponse(
@@ -98,11 +100,11 @@ fun Application.configureStatusPages() {
                 )
             )
         }
-        
+
         exception<IllegalArgumentException> { call, cause ->
             val requestId = getRequestId()
             logger.warn("Bad request [requestId=$requestId]: ${cause.message}")
-            
+
             call.respond(
                 HttpStatusCode.BadRequest,
                 ErrorResponse(
@@ -113,18 +115,18 @@ fun Application.configureStatusPages() {
                 )
             )
         }
-        
+
         exception<Throwable> { call, cause ->
             val requestId = getRequestId()
             logger.error("Unhandled exception [requestId=$requestId]", cause)
-            
+
             // In development, include more details; in production, hide them
             val message = if (isDevelopment) {
                 cause.message ?: "An internal server error occurred"
             } else {
                 "An internal server error occurred"
             }
-            
+
             call.respond(
                 HttpStatusCode.InternalServerError,
                 ErrorResponse(
@@ -141,6 +143,10 @@ fun Application.configureStatusPages() {
 // Custom exceptions for better error handling
 class ValidationException(message: String) : Exception(message)
 class NotFoundException(message: String) : Exception(message)
-class NoAvailableProviderException(message: String = "No available provider at this time") : Exception(message)
+class NoAvailableProviderException(
+    message: String = "No available provider at this time",
+    val provider: Provider,
+) : Exception(message)
+
 class RateLimitException(message: String = "Rate limit exceeded") : Exception(message)
 

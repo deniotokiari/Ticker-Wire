@@ -4,7 +4,6 @@ import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.get
 import io.ktor.client.request.parameter
-import kotlinx.coroutines.channels.ticker
 import pl.deniotokiari.tickerwire.adapter.StockInfoProvider
 import pl.deniotokiari.tickerwire.adapter.StockNewsProvider
 import pl.deniotokiari.tickerwire.adapter.StockSearchProvider

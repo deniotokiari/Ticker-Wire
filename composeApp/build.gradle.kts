@@ -23,7 +23,7 @@ val localProperties = Properties().apply {
     }
 }
 
-val apiUri = localProperties.getProperty("api.uri") ?: "http://localhost:8080/api/v1"
+val apiUri = localProperties.getProperty("api.uri") ?: "http://localhost:8080"
 
 kotlin {
     // Suppress expect/actual classes Beta warning
