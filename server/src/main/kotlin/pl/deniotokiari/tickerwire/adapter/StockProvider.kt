@@ -87,6 +87,8 @@ class StockProvider(
 
         if (cached == null) {
             val providers = searchProviders.toMutableMap()
+            val selections = mutableMapOf<Provider, Int>()
+            val failures = mutableMapOf<Provider, Int>()
 
             // Pre-fetch all provider usages once for the entire batch operation
             val preFetchedUsages = if (providers.isNotEmpty()) {
@@ -100,18 +102,26 @@ class StockProvider(
                     candidates = providers,
                     preFetchedUsages = preFetchedUsages,
                     priorityMap = SEARCH_PRIORITY,
+                    selections = selections,
+                    failures = failures,
                 ) {
                     it.search(query)
                 }
 
                 if (result.isNotEmpty()) {
                     searchCache.put(query, result)
+                    
+                    // Flush stats before returning
+                    statsService.recordBatch(selections = selections, failures = failures)
 
                     return result
                 } else {
                     providers.remove(provider)
                 }
             }
+
+            // Flush stats even if no results
+            statsService.recordBatch(selections = selections, failures = failures)
 
             return emptyList()
         } else {
@@ -124,6 +134,8 @@ class StockProvider(
         val nonCached = mutableSetOf<String>()
         val toCache = mutableMapOf<String, List<TickerNewsDto>>()
         val providers = newsProviders.toMutableMap()
+        val selections = mutableMapOf<Provider, Int>()
+        val failures = mutableMapOf<Provider, Int>()
         var remainingLimit = limit
 
         newsCache.getCollection(tickers).forEach { (ticker, news) ->
@@ -150,6 +162,8 @@ class StockProvider(
                     candidates = providers,
                     priorityMap = NEWS_PRIORITY,
                     preFetchedUsages = preFetchedUsages,
+                    selections = selections,
+                    failures = failures,
                     call = { provider ->
                         provider.news(ticker = ticker, limit = remainingLimit)
                     },
@@ -177,6 +191,9 @@ class StockProvider(
         }
 
         newsCache.putCollection(toCache)
+        
+        // Flush stats in batch
+        statsService.recordBatch(selections = selections, failures = failures)
 
         return cached
     }
@@ -186,6 +203,8 @@ class StockProvider(
         val toCache = mutableMapOf<String, TickerInfoDto>()
         val nonCached = mutableSetOf<String>()
         val providers = infoProviders.toMutableMap()
+        val selections = mutableMapOf<Provider, Int>()
+        val failures = mutableMapOf<Provider, Int>()
 
         infoCache.getCollection(tickers).forEach { (ticker, info) ->
             if (info == null) {
@@ -208,6 +227,8 @@ class StockProvider(
                     candidates = providers,
                     priorityMap = INFO_PRIORITY,
                     preFetchedUsages = preFetchedUsages,
+                    selections = selections,
+                    failures = failures,
                     call = { provider ->
                         provider.info(nonCached)
                     }
@@ -232,6 +253,9 @@ class StockProvider(
         }
 
         infoCache.putCollection(toCache)
+        
+        // Flush stats in batch
+        statsService.recordBatch(selections = selections, failures = failures)
 
         return cached
     }
@@ -240,6 +264,8 @@ class StockProvider(
         candidates: Map<Provider, P>,
         priorityMap: Map<Provider, Int>,
         preFetchedUsages: Map<Provider, LimitUsage>? = null,
+        selections: MutableMap<Provider, Int>,
+        failures: MutableMap<Provider, Int>,
         call: suspend (P) -> T
     ): Pair<Provider, T> {
         val (provider, config) = getAvailableProvider(
@@ -256,12 +282,14 @@ class StockProvider(
                 provider,
             )
 
-        statsService.recordSelection(provider)
+        // Track selection (will be flushed in batch at the end)
+        selections[provider] = (selections[provider] ?: 0) + 1
 
         return try {
             provider to call(requireNotNull(candidates[provider]))
         } catch (e: Exception) {
-            statsService.recordFailure(provider)
+            // Track failure (will be flushed in batch at the end)
+            failures[provider] = (failures[provider] ?: 0) + 1
             throw e
         }
     }

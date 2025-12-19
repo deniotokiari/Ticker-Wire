@@ -119,6 +119,107 @@ class ProviderStatsService(
     }
 
     /**
+     * Record multiple selections and failures in batch using Firestore batch writes
+     * More efficient than individual recordSelection/recordFailure calls
+     * 
+     * Uses batch getAll for reads and batch writes for updates
+     * Handles Firestore's 500 operation limit by chunking if needed
+     * 
+     * @param selections Map of provider to count of selections
+     * @param failures Map of provider to count of failures
+     */
+    suspend fun recordBatch(
+        selections: Map<Provider, Int> = emptyMap(),
+        failures: Map<Provider, Int> = emptyMap()
+    ) = withContext(Dispatchers.IO) {
+        if (selections.isEmpty() && failures.isEmpty()) {
+            return@withContext
+        }
+
+        try {
+            val month = getCurrentMonth()
+            val allProviders = (selections.keys + failures.keys).toSet()
+            
+            if (allProviders.isEmpty()) {
+                return@withContext
+            }
+
+            // Create document references in a list to preserve order
+            val providerList = allProviders.toList()
+            val docRefs = providerList.map { provider ->
+                provider to firestore
+                    .collection(COLLECTION_STATS)
+                    .document(month)
+                    .collection(SUBCOLLECTION_PROVIDERS)
+                    .document(provider.name)
+            }
+            
+            // Batch read current stats
+            val documents = firestore.getAll(*docRefs.map { it.second }.toTypedArray()).get()
+            val currentStats = docRefs.mapIndexed { index, (provider, _) ->
+                val doc = documents[index]
+                provider to Pair(
+                    if (doc.exists()) doc.getLong(FIELD_SELECTIONS) ?: 0L else 0L,
+                    if (doc.exists()) doc.getLong(FIELD_FAILURES) ?: 0L else 0L
+                )
+            }.toMap()
+            val docExistsMap = docRefs.mapIndexed { index, (provider, _) ->
+                provider to documents[index].exists()
+            }.toMap()
+            
+            // Prepare batch writes (handle 500 operation limit)
+            val batchSize = 500
+            providerList.chunked(batchSize).forEach { batchProviders ->
+                val batch = firestore.batch()
+                
+                batchProviders.forEach { provider ->
+                    val (_, docRef) = docRefs.first { it.first == provider }
+                    val (currentSelections, currentFailures) = currentStats[provider] ?: Pair(0L, 0L)
+                    val selectionCount = selections[provider] ?: 0
+                    val failureCount = failures[provider] ?: 0
+                    
+                    val newSelections = currentSelections + selectionCount
+                    val newFailures = currentFailures + failureCount
+                    
+                    val data = mutableMapOf<String, Any>(
+                        FIELD_SELECTIONS to newSelections,
+                        FIELD_FAILURES to newFailures
+                    )
+                    
+                    if (docExistsMap[provider] == true) {
+                        batch.update(docRef, data)
+                    } else {
+                        batch.set(docRef, data)
+                    }
+                }
+                
+                batch.commit().get()
+            }
+        } catch (e: Exception) {
+            logger.error("Failed to record batch stats", e)
+            // Fallback to individual calls if batch fails
+            selections.forEach { (provider, count) ->
+                repeat(count) {
+                    try {
+                        recordSelection(provider)
+                    } catch (ex: Exception) {
+                        logger.error("Failed to record selection for provider: ${provider.name}", ex)
+                    }
+                }
+            }
+            failures.forEach { (provider, count) ->
+                repeat(count) {
+                    try {
+                        recordFailure(provider)
+                    } catch (ex: Exception) {
+                        logger.error("Failed to record failure for provider: ${provider.name}", ex)
+                    }
+                }
+            }
+        }
+    }
+
+    /**
      * Get stats for current month
      */
     suspend fun getCurrentMonthStats(): MonthlyStats = withContext(Dispatchers.IO) {
