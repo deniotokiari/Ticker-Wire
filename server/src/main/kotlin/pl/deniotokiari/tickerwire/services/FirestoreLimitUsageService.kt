@@ -1,10 +1,13 @@
 package pl.deniotokiari.tickerwire.services
 
+import com.google.cloud.firestore.FieldValue
 import com.google.cloud.firestore.Firestore
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import org.slf4j.LoggerFactory
 import pl.deniotokiari.tickerwire.models.LimitConfig
 import pl.deniotokiari.tickerwire.models.LimitUsage
 import pl.deniotokiari.tickerwire.models.Provider
@@ -22,6 +25,7 @@ import java.time.format.DateTimeFormatter
  * - All writes remain transactional for correctness
  */
 class FirestoreLimitUsageService(private val firestore: Firestore) {
+    private val logger = LoggerFactory.getLogger(FirestoreLimitUsageService::class.java)
     private val collection = "provider_limits"
     private val formatter = DateTimeFormatter.ISO_LOCAL_DATE_TIME
     
@@ -30,6 +34,50 @@ class FirestoreLimitUsageService(private val firestore: Firestore) {
     private val usageCache = mutableMapOf<Provider, Pair<LimitUsage, Long>>()
     private val cacheMutex = Mutex()
     private val cacheTtlMs = 1000L // 1 second - short enough to minimize staleness
+    
+    companion object {
+        private const val MAX_TRANSACTION_RETRIES = 5
+        private const val INITIAL_RETRY_DELAY_MS = 10L
+    }
+    
+    /**
+     * Execute a transaction operation with explicit retry handling and exponential backoff
+     * Handles distributed concurrency by retrying on transaction conflicts
+     */
+    private suspend fun <T> executeWithRetry(
+        operation: suspend () -> T,
+        operationName: String
+    ): T {
+        var attempt = 0
+        var lastException: Exception? = null
+        
+        while (attempt < MAX_TRANSACTION_RETRIES) {
+            try {
+                return operation()
+            } catch (e: Exception) {
+                lastException = e
+                attempt++
+                
+                // Check if it's a transaction conflict (Firestore retries automatically, but we log it)
+                if (attempt < MAX_TRANSACTION_RETRIES) {
+                    val backoffMs = INITIAL_RETRY_DELAY_MS * (1 shl (attempt - 1)) // Exponential backoff
+                    logger.debug(
+                        "Transaction retry $attempt/$MAX_TRANSACTION_RETRIES for $operationName, " +
+                        "backing off for ${backoffMs}ms",
+                        e
+                    )
+                    delay(backoffMs)
+                } else {
+                    logger.error(
+                        "Transaction failed after $MAX_TRANSACTION_RETRIES retries for $operationName",
+                        e
+                    )
+                }
+            }
+        }
+        
+        throw lastException ?: Exception("Transaction failed after $MAX_TRANSACTION_RETRIES attempts: $operationName")
+    }
 
     /**
      * Get current usage for a provider
@@ -137,6 +185,7 @@ class FirestoreLimitUsageService(private val firestore: Firestore) {
      * Returns the new usage if successful, null if limit exceeded
      * 
      * Uses Firestore transaction to prevent race conditions across multiple instances
+     * Includes explicit retry handling with exponential backoff for distributed concurrency
      * Invalidates cache after successful increment to ensure consistency
      */
     suspend fun tryIncrementUsage(
@@ -146,36 +195,42 @@ class FirestoreLimitUsageService(private val firestore: Firestore) {
         val docRef = firestore.collection(collection).document(provider.name)
         val now = LocalDateTime.now()
 
-        // Use transaction for atomic read-check-update
-        // This ensures correctness even with multiple server instances
-        val result = firestore.runTransaction { transaction ->
-            val doc = transaction.get(docRef).get()
+        // Use transaction with explicit retry handling for distributed concurrency
+        // Firestore automatically retries, but we add explicit handling and logging
+        val result = executeWithRetry(
+            operation = {
+                firestore.runTransaction { transaction ->
+                val doc = transaction.get(docRef).get()
 
-            val currentUsage = if (doc.exists()) {
-                LimitUsage(
-                    lastUsed = doc.getString("last_used")?.let { LocalDateTime.parse(it, formatter) },
-                    usedCount = doc.getLong("used_count")?.toInt() ?: 0
-                )
-            } else {
-                LimitUsage()
-            }
+                val currentUsage = if (doc.exists()) {
+                    LimitUsage(
+                        lastUsed = doc.getString("last_used")?.let { LocalDateTime.parse(it, formatter) },
+                        usedCount = doc.getLong("used_count")?.toInt() ?: 0
+                    )
+                } else {
+                    LimitUsage()
+                }
 
-            // Check if we can use (with reset logic applied)
-            if (!currentUsage.canUse(config, now)) {
-                return@runTransaction null
-            }
+                // Check if we can use (with reset logic applied)
+                if (!currentUsage.canUse(config, now)) {
+                    return@runTransaction null
+                }
 
-            // Increment and save
-            val newUsage = currentUsage.increment(config, now)
+                // Increment and save
+                val newUsage = currentUsage.increment(config, now)
 
-            transaction.set(docRef, mapOf(
-                "last_used" to now.format(formatter),
-                "used_count" to newUsage.usedCount,
-                "updated_at" to com.google.cloud.Timestamp.now()
-            ))
+                // Use server timestamp for better consistency across instances
+                transaction.set(docRef, mapOf(
+                    "last_used" to now.format(formatter),
+                    "used_count" to newUsage.usedCount,
+                    "updated_at" to FieldValue.serverTimestamp()
+                ))
 
-            newUsage
-        }.get()
+                newUsage
+            }.get()
+            },
+            operationName = "tryIncrementUsage(${provider.name})"
+        )
         
         // Invalidate cache after successful increment
         // This ensures other instances see updated usage (after their cache expires)
@@ -191,6 +246,7 @@ class FirestoreLimitUsageService(private val firestore: Firestore) {
     /**
      * Increment usage without checking limits (use with caution)
      * Useful when you've already checked limits elsewhere
+     * Includes explicit retry handling for distributed concurrency
      * Invalidates cache after increment to ensure consistency
      */
     suspend fun incrementUsage(
@@ -200,28 +256,34 @@ class FirestoreLimitUsageService(private val firestore: Firestore) {
         val docRef = firestore.collection(collection).document(provider.name)
         val now = LocalDateTime.now()
 
-        val newUsage = firestore.runTransaction { transaction ->
-            val doc = transaction.get(docRef).get()
+        val newUsage = executeWithRetry<LimitUsage>(
+            operation = {
+                firestore.runTransaction { transaction ->
+                val doc = transaction.get(docRef).get()
 
-            val currentUsage = if (doc.exists()) {
-                LimitUsage(
-                    lastUsed = doc.getString("last_used")?.let { LocalDateTime.parse(it, formatter) },
-                    usedCount = doc.getLong("used_count")?.toInt() ?: 0
-                )
-            } else {
-                LimitUsage()
-            }
+                val currentUsage = if (doc.exists()) {
+                    LimitUsage(
+                        lastUsed = doc.getString("last_used")?.let { LocalDateTime.parse(it, formatter) },
+                        usedCount = doc.getLong("used_count")?.toInt() ?: 0
+                    )
+                } else {
+                    LimitUsage()
+                }
 
-            val usage = currentUsage.increment(config, now)
+                val usage = currentUsage.increment(config, now)
 
-            transaction.set(docRef, mapOf(
-                "last_used" to now.format(formatter),
-                "used_count" to usage.usedCount,
-                "updated_at" to com.google.cloud.Timestamp.now()
-            ))
+                // Use server timestamp for better consistency across instances
+                transaction.set(docRef, mapOf(
+                    "last_used" to now.format(formatter),
+                    "used_count" to usage.usedCount,
+                    "updated_at" to FieldValue.serverTimestamp()
+                ))
 
-            usage
-        }.get()
+                usage
+            }.get()
+            },
+            operationName = "incrementUsage(${provider.name})"
+        )
         
         // Invalidate cache after increment
         cacheMutex.withLock {
@@ -249,6 +311,7 @@ class FirestoreLimitUsageService(private val firestore: Firestore) {
 
     /**
      * Reset usage for all providers
+     * Invalidates cache after reset
      */
     suspend fun resetAllUsage() = withContext(Dispatchers.IO) {
         val batch = firestore.batch()
@@ -260,6 +323,11 @@ class FirestoreLimitUsageService(private val firestore: Firestore) {
             }
         
         batch.commit().get()
+        
+        // Invalidate entire cache after reset
+        cacheMutex.withLock {
+            usageCache.clear()
+        }
     }
 
     /**

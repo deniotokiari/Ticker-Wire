@@ -154,46 +154,48 @@ class StockProvider(
             null
         }
 
-        while (nonCached.isNotEmpty()) {
-            val ticker = nonCached.first()
+        try {
+            while (nonCached.isNotEmpty()) {
+                val ticker = nonCached.first()
 
-            runCatching {
-                makeCall(
-                    candidates = providers,
-                    priorityMap = NEWS_PRIORITY,
-                    preFetchedUsages = preFetchedUsages,
-                    selections = selections,
-                    failures = failures,
-                    call = { provider ->
-                        provider.news(ticker = ticker, limit = remainingLimit)
-                    },
-                )
-            }.onSuccess { (provider, result) ->
-                if (result.size < remainingLimit) {
-                    providers.remove(provider)
-                    remainingLimit -= result.size
-                } else {
-                    remainingLimit = limit
-                    nonCached.remove(ticker)
-                }
+                runCatching {
+                    makeCall(
+                        candidates = providers,
+                        priorityMap = NEWS_PRIORITY,
+                        preFetchedUsages = preFetchedUsages,
+                        selections = selections,
+                        failures = failures,
+                        call = { provider ->
+                            provider.news(ticker = ticker, limit = remainingLimit)
+                        },
+                    )
+                }.onSuccess { (provider, result) ->
+                    if (result.size < remainingLimit) {
+                        providers.remove(provider)
+                        remainingLimit -= result.size
+                    } else {
+                        remainingLimit = limit
+                        nonCached.remove(ticker)
+                    }
 
-                ((cached[ticker] ?: emptyList()) + result).let { items ->
-                    cached[ticker] = items
-                    toCache[ticker] = items
-                }
-            }.onFailure { error ->
-                if (error is AllProvidersHaveReachedTheirLimitsException && cached.isEmpty()) {
-                    throw error
-                } else if (error is NoAvailableProviderException) {
-                    providers.remove(error.provider)
+                    ((cached[ticker] ?: emptyList()) + result).let { items ->
+                        cached[ticker] = items
+                        toCache[ticker] = items
+                    }
+                }.onFailure { error ->
+                    if (error is AllProvidersHaveReachedTheirLimitsException && cached.isEmpty()) {
+                        throw error
+                    } else if (error is NoAvailableProviderException) {
+                        providers.remove(error.provider)
+                    }
                 }
             }
-        }
 
-        newsCache.putCollection(toCache)
-        
-        // Flush stats in batch
-        statsService.recordBatch(selections = selections, failures = failures)
+            newsCache.putCollection(toCache)
+        } finally {
+            // Always flush stats, even if an exception occurs
+            statsService.recordBatch(selections = selections, failures = failures)
+        }
 
         return cached
     }
@@ -221,41 +223,43 @@ class StockProvider(
             null
         }
 
-        while (nonCached.isNotEmpty()) {
-            runCatching {
-                makeCall(
-                    candidates = providers,
-                    priorityMap = INFO_PRIORITY,
-                    preFetchedUsages = preFetchedUsages,
-                    selections = selections,
-                    failures = failures,
-                    call = { provider ->
-                        provider.info(nonCached)
+        try {
+            while (nonCached.isNotEmpty()) {
+                runCatching {
+                    makeCall(
+                        candidates = providers,
+                        priorityMap = INFO_PRIORITY,
+                        preFetchedUsages = preFetchedUsages,
+                        selections = selections,
+                        failures = failures,
+                        call = { provider ->
+                            provider.info(nonCached)
+                        }
+                    )
+                }.onSuccess { (provider, result) ->
+                    result.forEach { (ticker, info) ->
+                        cached[ticker] = info
+                        nonCached.remove(ticker)
+                        toCache[ticker] = info
                     }
-                )
-            }.onSuccess { (provider, result) ->
-                result.forEach { (ticker, info) ->
-                    cached[ticker] = info
-                    nonCached.remove(ticker)
-                    toCache[ticker] = info
-                }
 
-                if (result.isEmpty()) {
-                    providers.remove(provider)
-                }
-            }.onFailure { error ->
-                if (error is AllProvidersHaveReachedTheirLimitsException && cached.isEmpty()) {
-                    throw error
-                } else if (error is NoAvailableProviderException) {
-                    providers.remove(error.provider)
+                    if (result.isEmpty()) {
+                        providers.remove(provider)
+                    }
+                }.onFailure { error ->
+                    if (error is AllProvidersHaveReachedTheirLimitsException && cached.isEmpty()) {
+                        throw error
+                    } else if (error is NoAvailableProviderException) {
+                        providers.remove(error.provider)
+                    }
                 }
             }
-        }
 
-        infoCache.putCollection(toCache)
-        
-        // Flush stats in batch
-        statsService.recordBatch(selections = selections, failures = failures)
+            infoCache.putCollection(toCache)
+        } finally {
+            // Always flush stats, even if an exception occurs
+            statsService.recordBatch(selections = selections, failures = failures)
+        }
 
         return cached
     }
@@ -276,11 +280,16 @@ class StockProvider(
 
         // Always use transactional increment for correctness across multiple instances
         // The transaction ensures atomic read-check-update even with concurrent requests
-        limitUsageService.tryIncrementUsage(provider, config.limit)
-            ?: throw NoAvailableProviderException(
+        val incrementResult = limitUsageService.tryIncrementUsage(provider, config.limit)
+        
+        if (incrementResult == null) {
+            // Provider limit exceeded - track as failure since we couldn't use it
+            failures[provider] = (failures[provider] ?: 0) + 1
+            throw NoAvailableProviderException(
                 "Provider $provider has reached its limit",
                 provider,
             )
+        }
 
         // Track selection (will be flushed in batch at the end)
         selections[provider] = (selections[provider] ?: 0) + 1
