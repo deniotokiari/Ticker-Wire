@@ -16,24 +16,28 @@ import pl.deniotokiari.tickerwire.plugins.configureScheduledTasks
 import pl.deniotokiari.tickerwire.plugins.configureStatusPages
 import pl.deniotokiari.tickerwire.routes.configureRouting
 
+private const val PORT = "PORT"
 private const val DEFAULT_PORT = 8080
+private const val DEFAULT_HOST = "0.0.0.0"
+
 private val logger = LoggerFactory.getLogger("Application")
 
 fun main() {
     // Cloud Run provides PORT environment variable
-    val port = System.getenv("PORT")?.toIntOrNull() ?: DEFAULT_PORT
+    val port = System.getenv(PORT)?.toIntOrNull() ?: DEFAULT_PORT
 
     logger.info("Starting server on port $port")
 
-    embeddedServer(Netty, port = port, host = "0.0.0.0", module = Application::module)
-        .start(wait = true)
+    embeddedServer(
+        factory = Netty,
+        port = port,
+        host = DEFAULT_HOST,
+        module = Application::module,
+    ).start(wait = true)
 }
 
 fun Application.module() {
-    val credentialsPath = System.getenv("FIREBASE_CONFIG_PATH")
-        ?: System.getProperty("firebase.config.path")
-
-    FirebaseConfig.initialize(credentialsPath)
+    FirebaseConfig.initialize()
 
     // Configure Koin DI (should be configured first)
     configureKoin()

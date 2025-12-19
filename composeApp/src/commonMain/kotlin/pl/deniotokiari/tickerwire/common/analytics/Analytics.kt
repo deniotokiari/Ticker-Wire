@@ -58,6 +58,9 @@ class Analytics(
     }
 }
 
+@Single
+fun provideFirebaseAnalyticsBridge(): FirebaseAnalyticsBridge = FirebaseAnalyticsBridge()
+
 /**
  * Platform bridge interface - implemented by each platform with native Firebase SDK
  */

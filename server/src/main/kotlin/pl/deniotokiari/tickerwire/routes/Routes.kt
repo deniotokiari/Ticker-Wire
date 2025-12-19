@@ -29,12 +29,16 @@ fun Application.configureRouting() {
         healthRoutes()
 
         // API routes
-        tickerRoutes(stockProvider, requestLimitsService)
-        ttlConfigRoutes(ttlConfigService)
+
 
         // Stats routes
         route("/api/v1") {
             statsRoutes()
+            tickerRoutes(
+                stockProvider = stockProvider,
+                requestLimitsService = requestLimitsService,
+            )
+            ttlConfigRoutes(ttlConfigService = ttlConfigService)
         }
     }
 }

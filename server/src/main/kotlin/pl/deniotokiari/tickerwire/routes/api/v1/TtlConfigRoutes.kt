@@ -8,7 +8,7 @@ import io.ktor.server.routing.route
 import pl.deniotokiari.tickerwire.services.TtlConfigService
 
 fun Route.ttlConfigRoutes(ttlConfigService: TtlConfigService) {
-    route("/api/v1/ttl") {
+    route("/ttl") {
         get("/client") {
             val ttlConfig = ttlConfigService.ttlConfig.client
 

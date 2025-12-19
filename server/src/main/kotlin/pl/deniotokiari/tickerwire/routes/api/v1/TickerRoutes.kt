@@ -70,7 +70,7 @@ fun Route.tickerRoutes(
     stockProvider: StockProvider,
     requestLimitsService: RequestLimitsService,
 ) {
-    route("/api/v1/tickers") {
+    route("/tickers") {
         get("/search") {
             val query = validateSearchQuery(call.request.queryParameters["query"])
             val results = stockProvider.search(query)

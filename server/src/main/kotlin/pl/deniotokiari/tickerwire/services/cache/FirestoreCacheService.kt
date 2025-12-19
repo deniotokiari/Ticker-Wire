@@ -114,6 +114,111 @@ class FirestoreCacheService<T : Any>(
     }
 
     /**
+     * Get multiple cached values from provided keys using Firestore batch getAll API
+     * Filters out null results (not found/expired entries)
+     *
+     * @param keys Collection of cache keys to retrieve
+     * @return Map of keys to cached values (only includes entries that were found and valid)
+     */
+    suspend fun getCollection(keys: Collection<String>): Map<String, T?> = withContext(Dispatchers.IO) {
+        if (keys.isEmpty()) {
+            return@withContext emptyMap()
+        }
+
+        val result = mutableMapOf<String, T?>()
+        val now = Timestamp.now()
+        
+        // Firestore getAll has a limit, so we need to batch requests
+        // Firestore batch limit is 500 operations
+        val batchSize = 500
+        val keyList = keys.toList()
+        
+        keyList.chunked(batchSize).forEach { batchKeys ->
+            // Create document references for this batch
+            val docRefs = batchKeys.map { key ->
+                key to firestore.collection(name).document(sanitizeKey(key))
+            }
+            
+            // Use getAll() for batch read
+            val documents = firestore.getAll(*docRefs.map { it.second }.toTypedArray()).get()
+            
+            // Process results
+            docRefs.forEachIndexed { index, (originalKey, _) ->
+                val doc = documents[index]
+                
+                when {
+                    !doc.exists() -> {
+                        result[originalKey] = null
+                    }
+                    else -> {
+                        val expiresAt = doc.getTimestamp("expires_at")
+                        if (expiresAt != null && now.toDate().after(expiresAt.toDate())) {
+                            // Entry expired, delete it
+                            delete(originalKey)
+                            result[originalKey] = null
+                        } else {
+                            val dataJson = doc.getString("data")
+                            if (dataJson == null) {
+                                result[originalKey] = null
+                            } else {
+                                try {
+                                    val value = json.decodeFromString(serializer, dataJson)
+                                    result[originalKey] = value
+                                } catch (e: Exception) {
+                                    // Corrupted data, delete it
+                                    delete(originalKey)
+                                    result[originalKey] = null
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Filter out null results
+        result
+    }
+
+    /**
+     * Store multiple values in cache with TTL using Firestore batch writes
+     * Handles Firestore batch limit of 500 operations by splitting into multiple batches
+     *
+     * @param data Map of keys to values to cache
+     */
+    suspend fun putCollection(data: Map<String, T>) = withContext(Dispatchers.IO) {
+        if (data.isEmpty()) {
+            return@withContext
+        }
+
+        val now = Instant.now()
+        val expiresAt = now.plus(ttl)
+        val timestamp = Timestamp.ofTimeSecondsAndNanos(expiresAt.epochSecond, expiresAt.nano)
+        val createdAt = Timestamp.ofTimeSecondsAndNanos(now.epochSecond, now.nano)
+        
+        // Firestore batch limit is 500 operations
+        val batchSize = 500
+        
+        data.entries.chunked(batchSize).forEach { batch ->
+            val writeBatch = firestore.batch()
+            
+            batch.forEach { (key, value) ->
+                val dataJson = json.encodeToString(serializer, value)
+                val docRef = firestore.collection(name).document(sanitizeKey(key))
+                
+                writeBatch.set(docRef, mapOf(
+                    "data" to dataJson,
+                    "created_at" to createdAt,
+                    "expires_at" to timestamp,
+                    "ttl_seconds" to ttl.seconds,
+                ))
+            }
+            
+            writeBatch.commit().get()
+        }
+    }
+
+    /**
      * Delete cached entry
      *
      * @param key The raw cache key (not processed by keyGenerator)
