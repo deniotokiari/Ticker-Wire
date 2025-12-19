@@ -120,7 +120,7 @@ class FirestoreCacheService<T : Any>(
      * @param keys Collection of cache keys to retrieve
      * @return Map of keys to cached values (only includes entries that were found and valid)
      */
-    suspend fun getCollection(keys: Collection<String>): Map<String, T> = withContext(Dispatchers.IO) {
+    suspend fun getCollection(keys: Collection<String>): Map<String, T?> = withContext(Dispatchers.IO) {
         if (keys.isEmpty()) {
             return@withContext emptyMap()
         }
@@ -177,7 +177,7 @@ class FirestoreCacheService<T : Any>(
         }
         
         // Filter out null results
-        result.filterValues { it != null }.mapValues { it.value!! }
+        result
     }
 
     /**

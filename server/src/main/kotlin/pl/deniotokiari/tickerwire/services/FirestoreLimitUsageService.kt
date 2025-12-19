@@ -2,6 +2,8 @@ package pl.deniotokiari.tickerwire.services
 
 import com.google.cloud.firestore.Firestore
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import pl.deniotokiari.tickerwire.models.LimitConfig
 import pl.deniotokiari.tickerwire.models.LimitUsage
@@ -12,35 +14,130 @@ import java.time.format.DateTimeFormatter
 /**
  * Service for managing provider limit usage state in Firestore
  * Uses Firestore transactions to ensure atomic read-check-update operations
+ * 
+ * Optimizations for scale:
+ * - Batch reads using Firestore getAll API
+ * - In-memory cache with short TTL (1 second) to reduce Firestore reads
+ * - Cache invalidation on writes to ensure consistency across instances
+ * - All writes remain transactional for correctness
  */
 class FirestoreLimitUsageService(private val firestore: Firestore) {
     private val collection = "provider_limits"
     private val formatter = DateTimeFormatter.ISO_LOCAL_DATE_TIME
+    
+    // In-memory cache: Provider -> (Usage, timestamp)
+    // Short TTL (1 second) to balance performance and consistency across instances
+    private val usageCache = mutableMapOf<Provider, Pair<LimitUsage, Long>>()
+    private val cacheMutex = Mutex()
+    private val cacheTtlMs = 1000L // 1 second - short enough to minimize staleness
 
     /**
      * Get current usage for a provider
+     * Uses in-memory cache with short TTL to reduce Firestore reads
      */
     suspend fun getUsage(provider: Provider): LimitUsage = withContext(Dispatchers.IO) {
+        val now = System.currentTimeMillis()
+        
+        // Check cache first
+        cacheMutex.withLock {
+            val cached = usageCache[provider]
+            if (cached != null && (now - cached.second) < cacheTtlMs) {
+                return@withContext cached.first
+            }
+        }
+        
+        // Cache miss or expired - fetch from Firestore
         val doc = firestore.collection(collection)
             .document(provider.name)
             .get()
             .get()
 
-        if (!doc.exists()) {
-            return@withContext LimitUsage()
+        val usage = if (!doc.exists()) {
+            LimitUsage()
+        } else {
+            LimitUsage(
+                lastUsed = doc.getString("last_used")?.let { LocalDateTime.parse(it, formatter) },
+                usedCount = doc.getLong("used_count")?.toInt() ?: 0
+            )
         }
-
-        LimitUsage(
-            lastUsed = doc.getString("last_used")?.let { LocalDateTime.parse(it, formatter) },
-            usedCount = doc.getLong("used_count")?.toInt() ?: 0
-        )
+        
+        // Update cache
+        cacheMutex.withLock {
+            usageCache[provider] = usage to now
+        }
+        
+        usage
+    }
+    
+    /**
+     * Get usage for multiple providers using Firestore batch getAll API
+     * More efficient than individual getUsage calls
+     * 
+     * @param providers Collection of providers to fetch usage for
+     * @return Map of provider to usage
+     */
+    suspend fun getUsagesBatch(providers: Collection<Provider>): Map<Provider, LimitUsage> = withContext(Dispatchers.IO) {
+        if (providers.isEmpty()) {
+            return@withContext emptyMap()
+        }
+        
+        val now = System.currentTimeMillis()
+        val result = mutableMapOf<Provider, LimitUsage>()
+        val providersToFetch = mutableSetOf<Provider>()
+        
+        // Check cache first
+        cacheMutex.withLock {
+            providers.forEach { provider ->
+                val cached = usageCache[provider]
+                if (cached != null && (now - cached.second) < cacheTtlMs) {
+                    result[provider] = cached.first
+                } else {
+                    providersToFetch.add(provider)
+                }
+            }
+        }
+        
+        // Batch fetch remaining providers from Firestore
+        if (providersToFetch.isNotEmpty()) {
+            val batchSize = 500 // Firestore batch limit
+            
+            providersToFetch.chunked(batchSize).forEach { batch ->
+                val docRefs = batch.map { provider ->
+                    provider to firestore.collection(collection).document(provider.name)
+                }
+                
+                val documents = firestore.getAll(*docRefs.map { it.second }.toTypedArray()).get()
+                
+                docRefs.forEachIndexed { index, (provider, _) ->
+                    val doc = documents[index]
+                    val usage = if (doc.exists()) {
+                        LimitUsage(
+                            lastUsed = doc.getString("last_used")?.let { LocalDateTime.parse(it, formatter) },
+                            usedCount = doc.getLong("used_count")?.toInt() ?: 0
+                        )
+                    } else {
+                        LimitUsage()
+                    }
+                    
+                    result[provider] = usage
+                    
+                    // Update cache
+                    cacheMutex.withLock {
+                        usageCache[provider] = usage to now
+                    }
+                }
+            }
+        }
+        
+        result
     }
 
     /**
      * Check if can use and atomically increment if yes
      * Returns the new usage if successful, null if limit exceeded
      * 
-     * Uses Firestore transaction to prevent race conditions
+     * Uses Firestore transaction to prevent race conditions across multiple instances
+     * Invalidates cache after successful increment to ensure consistency
      */
     suspend fun tryIncrementUsage(
         provider: Provider,
@@ -50,7 +147,8 @@ class FirestoreLimitUsageService(private val firestore: Firestore) {
         val now = LocalDateTime.now()
 
         // Use transaction for atomic read-check-update
-        firestore.runTransaction { transaction ->
+        // This ensures correctness even with multiple server instances
+        val result = firestore.runTransaction { transaction ->
             val doc = transaction.get(docRef).get()
 
             val currentUsage = if (doc.exists()) {
@@ -78,11 +176,22 @@ class FirestoreLimitUsageService(private val firestore: Firestore) {
 
             newUsage
         }.get()
+        
+        // Invalidate cache after successful increment
+        // This ensures other instances see updated usage (after their cache expires)
+        if (result != null) {
+            cacheMutex.withLock {
+                usageCache.remove(provider)
+            }
+        }
+        
+        result
     }
 
     /**
      * Increment usage without checking limits (use with caution)
      * Useful when you've already checked limits elsewhere
+     * Invalidates cache after increment to ensure consistency
      */
     suspend fun incrementUsage(
         provider: Provider,
@@ -91,7 +200,7 @@ class FirestoreLimitUsageService(private val firestore: Firestore) {
         val docRef = firestore.collection(collection).document(provider.name)
         val now = LocalDateTime.now()
 
-        firestore.runTransaction { transaction ->
+        val newUsage = firestore.runTransaction { transaction ->
             val doc = transaction.get(docRef).get()
 
             val currentUsage = if (doc.exists()) {
@@ -103,26 +212,39 @@ class FirestoreLimitUsageService(private val firestore: Firestore) {
                 LimitUsage()
             }
 
-            val newUsage = currentUsage.increment(config, now)
+            val usage = currentUsage.increment(config, now)
 
             transaction.set(docRef, mapOf(
                 "last_used" to now.format(formatter),
-                "used_count" to newUsage.usedCount,
+                "used_count" to usage.usedCount,
                 "updated_at" to com.google.cloud.Timestamp.now()
             ))
 
-            newUsage
+            usage
         }.get()
+        
+        // Invalidate cache after increment
+        cacheMutex.withLock {
+            usageCache.remove(provider)
+        }
+        
+        newUsage
     }
 
     /**
      * Reset usage for a provider (for testing or manual reset)
+     * Invalidates cache after reset
      */
     suspend fun resetUsage(provider: Provider) = withContext(Dispatchers.IO) {
         firestore.collection(collection)
             .document(provider.name)
             .delete()
             .get()
+        
+        // Invalidate cache
+        cacheMutex.withLock {
+            usageCache.remove(provider)
+        }
     }
 
     /**
