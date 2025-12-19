@@ -10,7 +10,10 @@ import java.io.FileInputStream
 object FirebaseConfig {
     private val logger = LoggerFactory.getLogger(FirebaseConfig::class.java)
 
-    fun initialize(credentialsPath: String? = null) {
+    fun initialize() {
+        val credentialsPath =
+            System.getenv("FIREBASE_CONFIG_PATH") ?: System.getProperty("firebase.config.path")
+
         if (FirebaseApp.getApps().isNotEmpty()) {
             logger.info("Firebase already initialized")
             return
@@ -25,12 +28,15 @@ object FirebaseConfig {
         // Option 1: Explicit path provided via environment variable
         if (!credentialsPath.isNullOrBlank()) {
             val file = File(credentialsPath)
+
             if (file.exists()) {
                 logger.info("Using Firebase credentials from: $credentialsPath")
+
                 return FirebaseOptions.builder()
                     .setCredentials(GoogleCredentials.fromStream(FileInputStream(file)))
                     .build()
             }
+
             logger.warn("Credentials path provided but file not found: $credentialsPath")
         }
 
@@ -38,6 +44,7 @@ object FirebaseConfig {
         try {
             logger.info("Trying Application Default Credentials...")
             val credentials = GoogleCredentials.getApplicationDefault()
+
             return FirebaseOptions.builder()
                 .setCredentials(credentials)
                 .setProjectId("ticker-wire")
@@ -49,8 +56,10 @@ object FirebaseConfig {
         // Option 3: Look in working directory
         val workingDir = File(System.getProperty("user.dir"))
         val localFile = File(workingDir, "serviceAccountKey.json")
+
         if (localFile.exists()) {
             logger.info("Using Firebase credentials from working directory: ${localFile.absolutePath}")
+
             return FirebaseOptions.builder()
                 .setCredentials(GoogleCredentials.fromStream(FileInputStream(localFile)))
                 .build()
@@ -58,8 +67,10 @@ object FirebaseConfig {
 
         // Option 4: Look in home directory (Docker/Cloud Run)
         val dockerFile = File("/home/appuser/serviceAccountKey.json")
+
         if (dockerFile.exists()) {
             logger.info("Using Firebase credentials from Docker path: ${dockerFile.absolutePath}")
+
             return FirebaseOptions.builder()
                 .setCredentials(GoogleCredentials.fromStream(FileInputStream(dockerFile)))
                 .build()
@@ -67,10 +78,10 @@ object FirebaseConfig {
 
         throw IllegalStateException(
             "Firebase credentials not found. Tried:\n" +
-                "  1. FIREBASE_CONFIG_PATH: $credentialsPath\n" +
-                "  2. Application Default Credentials\n" +
-                "  3. Working directory: ${localFile.absolutePath}\n" +
-                "  4. Docker path: ${dockerFile.absolutePath}"
+                    "  1. FIREBASE_CONFIG_PATH: $credentialsPath\n" +
+                    "  2. Application Default Credentials\n" +
+                    "  3. Working directory: ${localFile.absolutePath}\n" +
+                    "  4. Docker path: ${dockerFile.absolutePath}"
         )
     }
 }
